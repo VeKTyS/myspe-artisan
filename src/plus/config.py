@@ -22,7 +22,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 from typing import Final, TYPE_CHECKING
+from PyQt6.QtCore import QSettings
 
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow # pylint: disable=unused-import
@@ -34,25 +36,35 @@ uuid_tag: Final[str] = 'roastUUID' # as used in .alog profiles, send as 'roast_i
 schedule_uuid_tag: Final[str] = 'scheduleID' # send as 's_item_id' as part of the sync record to the server
 schedule_date_tag: Final[str] = 'scheduleDate' # send as 's_item_date' as part of the sync record to the server
 
-# Service URLs
+# Service URLs (dynamic resolution: env > QSettings > compiled default)
 
-# # LOCAL SETUP
-#api_base_url         = 'https://localhost:62602/api/v1'
-#web_base_url         = 'https://localhost:8088'
+_DEFAULT_API_BASE_URL: Final[str] = 'http://localhost:8000/v1'
+_DEFAULT_WEB_BASE_URL: Final[str] = 'http://localhost:3000'
 
-# # CLOUD SETUP
-api_base_url: Final[str] = 'https://artisan.plus/api/v1'
-web_base_url: Final[str] = 'https://artisan.plus'
 
-shop_base_url: Final[str] = 'https://buy.artisan.plus/'
+def _resolve_api_base_url() -> str:
+    env = os.environ.get('MYSPRESSO_API_URL')
+    if env:
+        return env.rstrip('/')
+    settings = QSettings()
+    stored = settings.value('cloud/api_base_url', '', type=str)
+    if stored:
+        return str(stored).rstrip('/')
+    return _DEFAULT_API_BASE_URL
 
-register_url: Final[str] = web_base_url + '/register'
-reset_passwd_url: Final[str] = web_base_url + '/resetPassword'
-auth_url: Final[str] = api_base_url + '/accounts/users/authenticate'
-stock_url: Final[str] = api_base_url + '/acoffees'
-roast_url: Final[str] = api_base_url + '/aroast'
-lock_schedule_url: Final[str] = api_base_url + '/aschedule/lock'
-notifications_url: Final[str] = api_base_url + '/notifications'
+
+api_base_url: str = _resolve_api_base_url()
+web_base_url: str = _DEFAULT_WEB_BASE_URL  # will be replaced in Task 3
+
+shop_base_url: Final[str] = 'https://buy.artisan.plus/'  # left unchanged for now
+
+register_url: str = web_base_url + '/register'
+reset_passwd_url: str = web_base_url + '/resetPassword'
+auth_url: str = api_base_url + '/accounts/users/authenticate'
+stock_url: str = api_base_url + '/acoffees'
+roast_url: str = api_base_url + '/aroast'
+lock_schedule_url: str = api_base_url + '/aschedule/lock'
+notifications_url: str = api_base_url + '/notifications'
 
 # Connection configurations
 
