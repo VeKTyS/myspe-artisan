@@ -79,7 +79,7 @@ def _resolve_api_base_url() -> str:
     if stored:
         return stored.rstrip('/')
     # 3. Défaut compilé
-    return 'http://localhost:8000/v1'  # dev local; sera changé en prod
+    return 'https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api'
 
 api_base_url = _resolve_api_base_url()
 web_base_url = _resolve_web_base_url()  # même logique avec MYSPRESSO_WEB_URL
@@ -96,7 +96,7 @@ notifications_url = api_base_url + '/notifications'
 
 | Variable | Rôle | Défaut |
 |---|---|---|
-| `MYSPRESSO_API_URL` | Base URL de l'API (sans trailing slash) | `http://localhost:8000/v1` |
+| `MYSPRESSO_API_URL` | Base URL de l'API (sans trailing slash) | `https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api` |
 | `MYSPRESSO_WEB_URL` | Base URL du dashboard web (pour liens UI) | `http://localhost:3000` |
 | `MYSPRESSO_AUTH_ENABLED` | `"true"` / `"false"`. Active la vérification d'auth | `"false"` |
 
@@ -215,7 +215,7 @@ Artisan est une application GUI PyQt6, peu testable en headless sans Xvfb/pytest
 
 ## 11. Décisions ouvertes (non bloquantes)
 
-- URL par défaut compilée : `http://localhost:8000/v1` choisi pour le dev. À changer avant tout déploiement public/release.
+- ~~URL par défaut compilée : `http://localhost:8000/v1` choisi pour le dev. À changer avant tout déploiement public/release.~~ **Résolu** : URL Supabase Edge Function MySpresso `https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api` adoptée comme défaut compilé. Pour dev local, override via `MYSPRESSO_API_URL`.
 - Liens `register_url` et `reset_passwd_url` : URLs MySpresso à fournir avant rebrand final.
 - Onglet Préférences "Cloud" : emplacement précis dans le dialog Préférences existant — à arbitrer au moment de l'implémentation.
 - Icône statut MySpresso : à fournir ou conserver l'existante.
