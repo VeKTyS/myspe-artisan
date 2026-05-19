@@ -58,4 +58,6 @@ def test_api_base_url_falls_back_to_compiled_default(fake_qsettings):
 
     with patch('plus.config.QSettings', return_value=settings):
         from plus.config import _resolve_api_base_url
-        assert _resolve_api_base_url() == 'http://localhost:8000/v1'
+        assert _resolve_api_base_url() == (
+            'https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api'
+        )

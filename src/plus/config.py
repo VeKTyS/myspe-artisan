@@ -38,7 +38,7 @@ schedule_date_tag: Final[str] = 'scheduleDate' # send as 's_item_date' as part o
 
 # Service URLs (dynamic resolution: env > QSettings > compiled default)
 
-_DEFAULT_API_BASE_URL: Final[str] = 'http://localhost:8000/v1'
+_DEFAULT_API_BASE_URL: Final[str] = 'https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api'
 _DEFAULT_WEB_BASE_URL: Final[str] = 'http://localhost:3000'
 
 
