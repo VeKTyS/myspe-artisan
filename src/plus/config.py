@@ -39,7 +39,6 @@ schedule_date_tag: Final[str] = 'scheduleDate' # send as 's_item_date' as part o
 # Service URLs (dynamic resolution: env > QSettings > compiled default)
 
 _DEFAULT_API_BASE_URL: Final[str] = 'https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api'
-_DEFAULT_WEB_BASE_URL: Final[str] = 'http://localhost:3000'
 
 
 def _resolve_api_base_url() -> str:
@@ -54,7 +53,7 @@ def _resolve_api_base_url() -> str:
 
 
 api_base_url: str = _resolve_api_base_url()
-web_base_url: str = _DEFAULT_WEB_BASE_URL  # will be replaced in Task 3
+web_base_url: str = 'https://artisan.plus'  # made dynamic in Task 3
 
 shop_base_url: Final[str] = 'https://buy.artisan.plus/'  # left unchanged for now
 
