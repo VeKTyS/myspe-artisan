@@ -75,3 +75,21 @@ def test_api_base_url_falls_back_to_compiled_default(fake_qsettings):
         assert _resolve_api_base_url() == (
             'https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api'
         )
+
+
+def test_web_base_url_uses_env_var_first(monkeypatch, fake_qsettings):
+    settings, store = fake_qsettings
+    store['cloud/web_base_url'] = 'http://from-settings'
+    monkeypatch.setenv('MYSPRESSO_WEB_URL', 'http://from-env')
+
+    with patch('plus.config.QSettings', return_value=settings):
+        from plus.config import _resolve_web_base_url
+        assert _resolve_web_base_url() == 'http://from-env'
+
+
+def test_web_base_url_falls_back_to_default(fake_qsettings):
+    settings, _store = fake_qsettings
+
+    with patch('plus.config.QSettings', return_value=settings):
+        from plus.config import _resolve_web_base_url
+        assert _resolve_web_base_url() == 'http://localhost:3000'
