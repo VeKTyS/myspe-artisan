@@ -9,7 +9,12 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch):
-    """Ensure MySpresso env vars don't leak between tests."""
+    """Ensure MySpresso env vars don't leak between tests.
+
+    All three are listed up-front (not just MYSPRESSO_API_URL) so that the
+    fixture is shared as-is by Task 3 (_WEB_URL) and Task 4 (_AUTH_ENABLED)
+    test cases appended to this file.
+    """
     for var in ('MYSPRESSO_API_URL', 'MYSPRESSO_WEB_URL', 'MYSPRESSO_AUTH_ENABLED'):
         monkeypatch.delenv(var, raising=False)
 
@@ -51,6 +56,15 @@ def test_api_base_url_falls_back_to_qsettings(fake_qsettings):
     with patch('plus.config.QSettings', return_value=settings):
         from plus.config import _resolve_api_base_url
         assert _resolve_api_base_url() == 'http://from-settings/v1'
+
+
+def test_api_base_url_strips_trailing_slash_from_qsettings(fake_qsettings):
+    settings, store = fake_qsettings
+    store['cloud/api_base_url'] = 'http://example.com/v1/'
+
+    with patch('plus.config.QSettings', return_value=settings):
+        from plus.config import _resolve_api_base_url
+        assert _resolve_api_base_url() == 'http://example.com/v1'
 
 
 def test_api_base_url_falls_back_to_compiled_default(fake_qsettings):
