@@ -39,6 +39,7 @@ schedule_date_tag: Final[str] = 'scheduleDate' # send as 's_item_date' as part o
 # Service URLs (dynamic resolution: env > QSettings > compiled default)
 
 _DEFAULT_API_BASE_URL: Final[str] = 'https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api'
+_DEFAULT_WEB_BASE_URL: Final[str] = 'http://localhost:3000'
 
 
 def _resolve_api_base_url() -> str:
@@ -57,11 +58,27 @@ def _resolve_api_base_url() -> str:
     return _DEFAULT_API_BASE_URL
 
 
+def _resolve_web_base_url() -> str:
+    env = os.environ.get('MYSPRESSO_WEB_URL')
+    if env:
+        return env.rstrip('/')
+    try:
+        # QSettings may be queried before QApplication exists (import-time):
+        # in that case it falls back to system defaults, which is fine; if it
+        # fails outright we still want the app to boot with the compiled default.
+        stored = QSettings().value('cloud/web_base_url', '', type=str)
+    except Exception:  # noqa: BLE001 - we intentionally swallow any QSettings failure
+        stored = ''
+    if stored:
+        return stored.rstrip('/')
+    return _DEFAULT_WEB_BASE_URL
+
+
 # api_base_url and the derived URL constants below cannot be Final[str] because
 # they are computed at import time from env/QSettings/default. The _DEFAULT_*
 # constants above stay Final[str] as true compile-time fallbacks.
 api_base_url: str = _resolve_api_base_url()
-web_base_url: str = 'https://artisan.plus'  # made dynamic in Task 3
+web_base_url: str = _resolve_web_base_url()
 
 shop_base_url: Final[str] = 'https://buy.artisan.plus/'  # left unchanged for now
 
