@@ -45,13 +45,21 @@ def _resolve_api_base_url() -> str:
     env = os.environ.get('MYSPRESSO_API_URL')
     if env:
         return env.rstrip('/')
-    settings = QSettings()
-    stored = settings.value('cloud/api_base_url', '', type=str)
+    try:
+        # QSettings may be queried before QApplication exists (import-time):
+        # in that case it falls back to system defaults, which is fine; if it
+        # fails outright we still want the app to boot with the compiled default.
+        stored = QSettings().value('cloud/api_base_url', '', type=str)
+    except Exception:  # noqa: BLE001 - we intentionally swallow any QSettings failure
+        stored = ''
     if stored:
-        return str(stored).rstrip('/')
+        return stored.rstrip('/')
     return _DEFAULT_API_BASE_URL
 
 
+# api_base_url and the derived URL constants below cannot be Final[str] because
+# they are computed at import time from env/QSettings/default. The _DEFAULT_*
+# constants above stay Final[str] as true compile-time fallbacks.
 api_base_url: str = _resolve_api_base_url()
 web_base_url: str = 'https://artisan.plus'  # made dynamic in Task 3
 
