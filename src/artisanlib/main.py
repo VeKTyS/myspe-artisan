@@ -4379,36 +4379,99 @@ class ApplicationWindow(QMainWindow):
         dlg.exec()
 
     # MySpresso fork: force-push the current roast, bypassing the upstream
-    # CHARGE+DROP requirement enforced in roast_properties.py / canvas.py.
-    # Useful for ad-hoc data entry workflows (e.g. logging a roast done
-    # without a connected device, freestyle inventory sync, debug pushes).
+    # CHARGE+DROP requirement enforced in roast_properties.py / canvas.py
+    # AND the queue Worker's is_full_roast_record gate.
+    # We POST directly via connection.sendData so the user gets immediate
+    # feedback in the status bar instead of waiting on the persistqueue.
     def _pushRoastToMyspresso(self) -> None:
         import uuid as _uuid
+        import datetime as _dt
         from PyQt6.QtCore import QDateTime
-        import plus.controller
-        import plus.queue
+        import plus.config as _pconfig
+        import plus.connection as _pconn
+        import plus.controller as _pctl
 
-        # Make sure we are connected (controller.connect short-circuits when
-        # auth_enabled=False, so this is essentially free).
+        # Make sure we are connected (no-op when auth_enabled=False after
+        # the short-circuit, but still useful when auth_enabled=True).
         if self.plus_account is None:
             try:
-                plus.controller.connect(clear_on_failure=False, interactive=False)
+                _pctl.connect(clear_on_failure=False, interactive=False)
             except Exception as e:  # pylint: disable=broad-except
                 _log.exception(e)
 
-        # addRoast() requires roast_id + date + amount in the record. For a
-        # roast that was never CHARGE'd, those fields are unset; populate them
-        # with sensible defaults so the push goes through.
+        # Ensure the profile has a roast UUID (re-used across edits) and a
+        # date — backend requires both to identify and persist the roast.
         if not self.qmc.roastUUID:
             self.qmc.roastUUID = _uuid.uuid4().hex
-        if not self.qmc.roastepoch:
-            self.qmc.roastepoch = QDateTime.currentDateTime().toSecsSinceEpoch()
+        if not self.qmc.roastdate or self.qmc.roastdate.toSecsSinceEpoch() == 0:
+            self.qmc.roastdate = QDateTime.currentDateTime()
 
+        # Read the bean/store selection from the canvas (set when the user
+        # selected Stock + Magasin and clicked OK in Roast Properties).
+        coffee = getattr(self.qmc, 'plus_coffee', None) or None
+        store = getattr(self.qmc, 'plus_store', None) or None
+
+        # Read weights from the canvas. self.qmc.weight is [green, roasted, unit].
         try:
-            plus.queue.addRoast(unsynced=True)
+            green_kg = float(self.qmc.weight[0])
+            roasted_kg = float(self.qmc.weight[1])
+            unit = str(self.qmc.weight[2])
+            # Convert to kg if user picked another unit.
+            if unit.lower() != 'kg':
+                # Lazy import to avoid touching top-level imports.
+                from artisanlib.util import convertWeight, weight_units
+                idx_from = weight_units.index(unit)
+                idx_kg = weight_units.index('Kg')
+                green_kg = float(convertWeight(green_kg, idx_from, idx_kg))
+                roasted_kg = float(convertWeight(roasted_kg, idx_from, idx_kg))
+        except Exception:  # pylint: disable=broad-except
+            green_kg = 0.0
+            roasted_kg = 0.0
+
+        if green_kg <= 0:
+            self.sendmessage(QApplication.translate(
+                'Plus',
+                'Renseignez d\'abord le poids vert dans Propriétés (Vert) avant d\'envoyer.'
+            ))
+            return
+        if coffee is None and store is None:
+            self.sendmessage(QApplication.translate(
+                'Plus',
+                'Sélectionnez un café et un magasin dans Propriétés avant d\'envoyer.'
+            ))
+            return
+
+        payload = {
+            'roast_id': self.qmc.roastUUID,
+            'date': self.qmc.roastdate.toString('yyyy-MM-ddTHH:mm:sszzz'),
+            'amount': green_kg,
+            'start_weight': green_kg,
+            'end_weight': roasted_kg,
+            'label': self.qmc.title or 'Manual push',
+            'machine': self.qmc.roastertype or 'MANUAL',
+            'coffee': coffee,
+            'location': store,
+            'blend': None,
+            'modified_at': _dt.datetime.now(_dt.UTC).strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+        }
+        try:
             self.sendmessage(QApplication.translate(
                 'Plus', 'Envoi de la torréfaction sur MySpresso…'
             ))
+            r = _pconn.sendData(_pconfig.roast_url, payload, 'POST')
+            if r is None:
+                self.sendmessage(QApplication.translate(
+                    'Plus', 'Echec de l\'envoi: pas de réponse du serveur.'
+                ))
+                return
+            if 200 <= r.status_code < 300:
+                self.sendmessage(QApplication.translate(
+                    'Plus', 'Torréfaction téléchargée avec succès sur MySpresso'
+                ))
+            else:
+                self.sendmessage(QApplication.translate(
+                    'Plus', 'Echec de l\'envoi: HTTP {} — {}'
+                ).format(r.status_code, r.text[:120]))
         except Exception as e:  # pylint: disable=broad-except
             _log.exception(e)
             self.sendmessage(QApplication.translate(
