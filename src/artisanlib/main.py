@@ -1534,7 +1534,7 @@ class ApplicationWindow(QMainWindow):
         'main_menu_actions_with_shortcuts', 'ui_mode', 'UIModeMenu',  'productionModeAction', 'defaultModeAction', 'expertModeAction', 'calculatorAction',
         'helpAboutAction', 'checkUpdateAction', 'errorAction', 'messageAction', 'serialAction', 'platformAction', 'aboutQtAction',
         'helpDocumentationAction', 'KshortCAction', 'profile_data_type_adapter', 'official_build',
-        'myspressoSettingsAction' ]
+        'myspressoSettingsAction', 'pushRoastToMyspressoAction' ]
 
     nLCDS: Final[int] = 10 # maximum number of LCDs and extra devices (2x10 => 20 in total!)
 
@@ -2830,6 +2830,13 @@ class ApplicationWindow(QMainWindow):
             self,
         )
         self.myspressoSettingsAction.triggered.connect(self._openMyspressoSettings)
+
+        # MySpresso fork: manual push of the current roast (bypasses CHARGE+DROP gate)
+        self.pushRoastToMyspressoAction = QAction(
+            QApplication.translate('Menu', 'Envoyer la torréfaction sur MySpresso'),
+            self,
+        )
+        self.pushRoastToMyspressoAction.triggered.connect(self._pushRoastToMyspresso)
 
         # this one does not include the edit menu cut/copy/paste shortcuts which should never be disabled
         self.main_menu_actions_with_shortcuts:list[QAction|None] = [
@@ -4371,6 +4378,43 @@ class ApplicationWindow(QMainWindow):
         dlg = MyspressoSettingsDialog(self)
         dlg.exec()
 
+    # MySpresso fork: force-push the current roast, bypassing the upstream
+    # CHARGE+DROP requirement enforced in roast_properties.py / canvas.py.
+    # Useful for ad-hoc data entry workflows (e.g. logging a roast done
+    # without a connected device, freestyle inventory sync, debug pushes).
+    def _pushRoastToMyspresso(self) -> None:
+        import uuid as _uuid
+        from PyQt6.QtCore import QDateTime
+        import plus.controller
+        import plus.queue
+
+        # Make sure we are connected (controller.connect short-circuits when
+        # auth_enabled=False, so this is essentially free).
+        if self.plus_account is None:
+            try:
+                plus.controller.connect(clear_on_failure=False, interactive=False)
+            except Exception as e:  # pylint: disable=broad-except
+                _log.exception(e)
+
+        # addRoast() requires roast_id + date + amount in the record. For a
+        # roast that was never CHARGE'd, those fields are unset; populate them
+        # with sensible defaults so the push goes through.
+        if not self.qmc.roastUUID:
+            self.qmc.roastUUID = _uuid.uuid4().hex
+        if not self.qmc.roastepoch:
+            self.qmc.roastepoch = QDateTime.currentDateTime().toSecsSinceEpoch()
+
+        try:
+            plus.queue.addRoast(unsynced=True)
+            self.sendmessage(QApplication.translate(
+                'Plus', 'Envoi de la torréfaction sur MySpresso…'
+            ))
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+            self.sendmessage(QApplication.translate(
+                'Plus', 'Echec de l\'envoi: {}'
+            ).format(str(e)))
+
     # checks a builds signature using the public key
     def app_signature_valid(self) -> bool:
         try:
@@ -4549,6 +4593,7 @@ class ApplicationWindow(QMainWindow):
             help_menu.addAction(self.resetAction)
         # MySpresso fork: Cloud settings dialog (all UI modes)
         help_menu.addSeparator()
+        help_menu.addAction(self.pushRoastToMyspressoAction)
         help_menu.addAction(self.myspressoSettingsAction)
         return help_menu
 
