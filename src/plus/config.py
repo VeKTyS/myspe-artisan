@@ -76,6 +76,35 @@ def _resolve_web_base_url() -> str:
     return _DEFAULT_WEB_BASE_URL
 
 
+def _resolve_upload_roast_url() -> str:
+    """URL of the ZABAWA upload-roast Edge Function (sibling of artisan-api).
+
+    Used by the 'Envoyer la torréfaction sur MySpresso' manual push action
+    to ingest a roast through the same pipeline as the ZABAWA desktop
+    client, which is what wires inventory decrement via the
+    sync_roast_log_to_ui_tables trigger.
+    """
+    env = os.environ.get('MYSPRESSO_UPLOAD_ROAST_URL')
+    if env:
+        return env.rstrip('/')
+    try:
+        stored = QSettings().value('cloud/upload_roast_url', '', type=str)
+    except Exception:  # noqa: BLE001
+        stored = ''
+    if stored:
+        return stored.rstrip('/')
+    # Derive from api_base_url. The artisan-api Edge Function is mounted at
+    #   /functions/v1/artisan-api/v1
+    # and upload-roast lives one level up at
+    #   /functions/v1/upload-roast
+    base = api_base_url
+    for suffix in ('/artisan-api/v1', '/artisan-api'):
+        if base.endswith(suffix):
+            return base[: -len(suffix)] + '/upload-roast'
+    # Fallback: assume the same Supabase host with the standard mount.
+    return 'https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/upload-roast'
+
+
 def _resolve_auth_enabled() -> bool:
     env = os.environ.get('MYSPRESSO_AUTH_ENABLED')
     if env is not None:
@@ -95,6 +124,8 @@ def _resolve_auth_enabled() -> bool:
 # constants above stay Final[str] as true compile-time fallbacks.
 api_base_url: str = _resolve_api_base_url()
 web_base_url: str = _resolve_web_base_url()
+# Derived AFTER api_base_url because _resolve_upload_roast_url reads it.
+upload_roast_url: str = _resolve_upload_roast_url()
 
 shop_base_url: Final[str] = 'https://buy.artisan.plus/'  # left unchanged for now
 
