@@ -158,6 +158,11 @@ def make_authentify() -> Authentifier:
     def authentify_method(passwd:str|None = None, keychain_success:bool = False, clear_password_cache:bool = False) -> bool:
         nonlocal passwd_encrypted
         _log.debug('authentify(_,%s)', keychain_success)
+        # MySpresso fork: when auth is disabled, skip HTTP and use a dummy session.
+        if not config.auth_enabled:
+            _log.debug('authentify: auth_enabled=False, using dummy session')
+            setToken('noauth', 'local')
+            return True
 
         if clear_password_cache:
             passwd_encrypted = None
