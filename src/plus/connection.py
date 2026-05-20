@@ -376,7 +376,7 @@ def getHeaders(
                 headers['Accept-Language'] = locale
         except Exception as e:  # pylint: disable=broad-except
             _log.exception(e)
-        if authorized:
+        if authorized and config.auth_enabled:
             token = getToken()
             if token is not None:
                 headers['Authorization'] = f'Bearer {token}'
@@ -435,7 +435,7 @@ def sendData(
             )
         updateReadTimeoutOnSuccess()
         _log.debug('-> status %s, time %s', r.status_code, r.elapsed.total_seconds())
-        if authorized and r.status_code == 401:  # authorisation failed
+        if authorized and config.auth_enabled and r.status_code == 401:  # authorisation failed
             _log.debug('-> session token outdated (401)')
             # we re-authentify by renewing the session token and try again
             if authentify():
@@ -471,7 +471,7 @@ def sendData(
 def getData(url: str, authorized: bool = True, params:dict[str,str]|None = None) -> requests.models.Response|None:
     _log.debug('getData(%s,%s,%s)', url, authorized, params)
     headers = getHeaders(authorized)
-    if authorized and 'Authorization' not in headers:
+    if authorized and config.auth_enabled and 'Authorization' not in headers:
         _log.debug('no access token')
         # we don't have a token yet, lets first authorize
         if not authentify():
@@ -490,7 +490,7 @@ def getData(url: str, authorized: bool = True, params:dict[str,str]|None = None)
         _log.debug('-> status %s', r.status_code)
         # _log.debug("-> headers %s",r.headers)
         _log.debug('-> time %s', r.elapsed.total_seconds())
-        if authorized and r.status_code == 401:  # authorisation failed
+        if authorized and config.auth_enabled and r.status_code == 401:  # authorisation failed
             _log.debug(
                 '-> session token outdated (404) - re-authentify'
             )
