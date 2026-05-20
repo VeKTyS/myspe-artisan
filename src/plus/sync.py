@@ -727,7 +727,7 @@ def applyServerUpdates(data:dict[str, Any]) -> None:
             aw.qmc.fileDirty()
             aw.sendmessageSignal.emit(
                 QApplication.translate(
-                    'Plus', 'Updated data received from artisan.plus'
+                    'Plus', 'Updated data received from MySpresso'
                 ),
                 True,
                 None,
