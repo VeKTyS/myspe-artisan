@@ -4406,6 +4406,15 @@ class ApplicationWindow(QMainWindow):
         if not self.qmc.roastdate or self.qmc.roastdate.toSecsSinceEpoch() == 0:
             self.qmc.roastdate = QDateTime.currentDateTime()
 
+        # Artisan stores roastUUID in 32-char .hex form (no hyphens). The
+        # MySpresso backend validates UUIDs in canonical form (with hyphens),
+        # so normalize before sending. uuid.UUID() accepts both forms.
+        try:
+            canonical_uuid = str(_uuid.UUID(self.qmc.roastUUID))
+        except (ValueError, TypeError):
+            canonical_uuid = str(_uuid.uuid4())
+            self.qmc.roastUUID = canonical_uuid.replace('-', '')
+
         # Read the bean/store selection from the canvas (set when the user
         # selected Stock + Magasin and clicked OK in Roast Properties).
         coffee = getattr(self.qmc, 'plus_coffee', None) or None
@@ -4442,7 +4451,7 @@ class ApplicationWindow(QMainWindow):
             return
 
         payload = {
-            'roast_id': self.qmc.roastUUID,
+            'roast_id': canonical_uuid,
             'date': self.qmc.roastdate.toString('yyyy-MM-ddTHH:mm:sszzz'),
             'amount': green_kg,
             'start_weight': green_kg,
