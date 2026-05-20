@@ -146,3 +146,46 @@ def test_authentify_sets_dummy_token_when_auth_disabled(
 
     assert connection.config.token == 'noauth'
     assert connection.config.nickname == 'local'
+
+
+def test_authorization_header_omitted_when_auth_disabled(monkeypatch):
+    """Outgoing requests must not include Authorization when auth_enabled=False."""
+    # Use connection.config (the stub _config_mod) — not a re-imported plus.config
+    monkeypatch.setattr(connection.config, 'auth_enabled', False)
+    monkeypatch.setattr(connection.config, 'token', 'noauth')
+
+    # Provide a real app_window so getHeaders() builds a full header dict;
+    # without the auth_enabled guard the Authorization header would appear here.
+    mock_aw = MagicMock()
+    mock_aw.get_os.return_value = ('macOS', '14.0', 'arm64')
+    mock_aw.locale_str = 'en_US'
+    monkeypatch.setattr(connection.config, 'app_window', mock_aw)
+
+    mock_response = MagicMock(status_code=200, text='{}')
+    mock_response.json.return_value = {}
+    with patch('plus.connection.requests.get', return_value=mock_response) as mock_get:
+        connection.getData('http://test/endpoint')
+
+    headers = mock_get.call_args.kwargs.get('headers', {})
+    assert 'Authorization' not in headers, f"Authorization unexpectedly present: {headers}"
+
+
+def test_authorization_header_present_when_auth_enabled(monkeypatch):
+    """Sanity: Authorization header IS present when auth_enabled=True."""
+    # Use connection.config (the stub _config_mod) — not a re-imported plus.config
+    monkeypatch.setattr(connection.config, 'auth_enabled', True)
+    monkeypatch.setattr(connection.config, 'token', 'real-token-xyz')
+
+    # app_window must be non-None so getHeaders() builds a real header dict
+    mock_aw = MagicMock()
+    mock_aw.get_os.return_value = ('macOS', '14.0', 'arm64')
+    mock_aw.locale_str = 'en_US'
+    monkeypatch.setattr(connection.config, 'app_window', mock_aw)
+
+    mock_response = MagicMock(status_code=200, text='{}')
+    mock_response.json.return_value = {}
+    with patch('plus.connection.requests.get', return_value=mock_response) as mock_get:
+        connection.getData('http://test/endpoint')
+
+    headers = mock_get.call_args.kwargs.get('headers', {})
+    assert headers.get('Authorization') == 'Bearer real-token-xyz'
