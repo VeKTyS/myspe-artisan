@@ -167,9 +167,13 @@ def connect(clear_on_failure: bool =False, interactive: bool = True) -> None:
                             )
                     except Exception as e:  # pylint: disable=broad-except
                         _log.exception(e)
-                if interactive and (
-                    aw.plus_account is None
-                    or config_passwd is None
+                if (
+                    config.auth_enabled
+                    and interactive
+                    and (
+                        aw.plus_account is None
+                        or config_passwd is None
+                    )
                 ):  # @UndefinedVariable
                     # ask user for credentials
                     import plus.login
@@ -232,6 +236,14 @@ def connect(clear_on_failure: bool =False, interactive: bool = True) -> None:
 
                         # remember password in memory for this session
                         config_passwd = passwd
+                # MySpresso fork: when auth is disabled, treat the user as
+                # already authenticated with a synthetic local account so the
+                # downstream connection.authentify() (which short-circuits in
+                # this mode) is reached.
+                if not config.auth_enabled and aw.plus_account is None:
+                    aw.plus_account = 'local'
+                    aw.plus_email = None
+                    config_passwd = None
             if aw is not None:
                 if aw.plus_account is None:  # @UndefinedVariable
                     if interactive:
