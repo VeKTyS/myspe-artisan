@@ -211,7 +211,7 @@ def plus_login(
 ) -> tuple[str|None, str|None, bool, int]:
     _log.debug('plus_login()')
     ld = Login(window, aw, email, saved_password, remember_credentials)
-    ld.setWindowTitle('plus')
+    ld.setWindowTitle('MySpresso')
     ld.setWindowFlags(Qt.WindowType.Sheet)
     ld.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
     res:int = ld.exec()
