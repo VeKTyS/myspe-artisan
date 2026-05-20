@@ -159,9 +159,22 @@ def make_authentify() -> Authentifier:
         nonlocal passwd_encrypted
         _log.debug('authentify(_,%s)', keychain_success)
         # MySpresso fork: when auth is disabled, skip HTTP and use a dummy session.
+        # NOTE: clearCredentials() calls authentify(clear_password_cache=True) while
+        # already holding token_semaphore. Calling setToken() here would re-acquire
+        # the same non-reentrant semaphore and deadlock the UI. Set the dummy session
+        # attributes directly to avoid that.
         if not config.auth_enabled:
-            _log.debug('authentify: auth_enabled=False, using dummy session')
-            setToken('noauth', 'local')
+            _log.debug('authentify: auth_enabled=False, using dummy session (clear=%s)', clear_password_cache)
+            if clear_password_cache:
+                config.token = None
+                config.nickname = None
+                passwd_encrypted = None
+            else:
+                config.token = 'noauth'
+                config.nickname = 'local'
+                aw = config.app_window
+                if aw is not None and aw.qmc is not None:
+                    aw.qmc.operator = 'local'
             return True
 
         if clear_password_cache:

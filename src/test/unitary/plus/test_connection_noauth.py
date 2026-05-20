@@ -148,6 +148,33 @@ def test_authentify_sets_dummy_token_when_auth_disabled(
     assert connection.config.nickname == 'local'
 
 
+def test_authentify_with_clear_password_cache_does_not_call_setToken(
+    monkeypatch, reset_config_token  # noqa: ARG001
+):
+    """Regression: authentify(clear_password_cache=True) must NOT call setToken().
+
+    Background: clearCredentials() acquires token_semaphore then calls
+    authentify(clear_password_cache=True). If our short-circuit calls
+    setToken() (which re-acquires the same non-reentrant semaphore), the UI
+    thread deadlocks when the user disconnects.
+    """
+    monkeypatch.setattr(connection.config, 'auth_enabled', False)
+
+    with patch('plus.connection.setToken') as mock_setToken, \
+         patch('plus.connection.requests'):
+        result = connection.authentify(clear_password_cache=True)
+
+    assert result is True
+    assert mock_setToken.call_count == 0, (
+        f'setToken called {mock_setToken.call_count} times with '
+        f'clear_password_cache=True — this would deadlock under '
+        f'clearCredentials()'
+    )
+    # The dummy session must be cleared, not set to 'noauth'/'local'
+    assert connection.config.token is None
+    assert connection.config.nickname is None
+
+
 def test_authorization_header_omitted_when_auth_disabled(monkeypatch):
     """Outgoing requests must not include Authorization when auth_enabled=False."""
     # Use connection.config (the stub _config_mod) — not a re-imported plus.config
