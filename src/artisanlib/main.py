@@ -1533,7 +1533,8 @@ class ApplicationWindow(QMainWindow):
         'schedule_visible_filter', 'scheduler_tasks_visible', 'scheduler_completed_details_visible', 'scheduler_filters_visible', 'scheduler_auto_open',
         'main_menu_actions_with_shortcuts', 'ui_mode', 'UIModeMenu',  'productionModeAction', 'defaultModeAction', 'expertModeAction', 'calculatorAction',
         'helpAboutAction', 'checkUpdateAction', 'errorAction', 'messageAction', 'serialAction', 'platformAction', 'aboutQtAction',
-        'helpDocumentationAction', 'KshortCAction', 'profile_data_type_adapter', 'official_build' ]
+        'helpDocumentationAction', 'KshortCAction', 'profile_data_type_adapter', 'official_build',
+        'myspressoSettingsAction' ]
 
     nLCDS: Final[int] = 10 # maximum number of LCDs and extra devices (2x10 => 20 in total!)
 
@@ -2822,6 +2823,13 @@ class ApplicationWindow(QMainWindow):
         self.resetAction = QAction(QApplication.translate('Menu', 'Factory Reset'), self)
         self.resetAction.setMenuRole(QAction.MenuRole.NoRole)
         self.resetAction.triggered.connect(self.resetApplication)
+
+        # MySpresso fork: Cloud settings dialog
+        self.myspressoSettingsAction = QAction(
+            QApplication.translate('Menu', 'MySpresso Settings…'),
+            self,
+        )
+        self.myspressoSettingsAction.triggered.connect(self._openMyspressoSettings)
 
         # this one does not include the edit menu cut/copy/paste shortcuts which should never be disabled
         self.main_menu_actions_with_shortcuts:list[QAction|None] = [
@@ -4357,6 +4365,12 @@ class ApplicationWindow(QMainWindow):
         self.zoomOutShortcut.activated.connect(self.zoomOut)
 
 
+    # MySpresso fork: open cloud settings dialog
+    def _openMyspressoSettings(self) -> None:
+        from artisanlib.myspresso_settings_dialog import MyspressoSettingsDialog
+        dlg = MyspressoSettingsDialog(self)
+        dlg.exec()
+
     # checks a builds signature using the public key
     def app_signature_valid(self) -> bool:
         try:
@@ -4533,6 +4547,9 @@ class ApplicationWindow(QMainWindow):
             help_menu.addAction(self.saveAsSettingsAction)
             help_menu.addSeparator()
             help_menu.addAction(self.resetAction)
+        # MySpresso fork: Cloud settings dialog (all UI modes)
+        help_menu.addSeparator()
+        help_menu.addAction(self.myspressoSettingsAction)
         return help_menu
 
     #
