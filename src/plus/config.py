@@ -74,6 +74,20 @@ def _resolve_web_base_url() -> str:
     return _DEFAULT_WEB_BASE_URL
 
 
+def _resolve_auth_enabled() -> bool:
+    env = os.environ.get('MYSPRESSO_AUTH_ENABLED')
+    if env is not None:
+        return env.strip().lower() == 'true'
+    try:
+        # QSettings may be queried before QApplication exists (import-time):
+        # in that case it falls back to system defaults, which is fine; if it
+        # fails outright we still want the app to boot with the compiled default.
+        stored = QSettings().value('cloud/auth_enabled', False, type=bool)
+    except Exception:  # noqa: BLE001 - swallow any QSettings failure pre-QApplication
+        stored = False
+    return bool(stored)
+
+
 # api_base_url and the derived URL constants below cannot be Final[str] because
 # they are computed at import time from env/QSettings/default. The _DEFAULT_*
 # constants above stay Final[str] as true compile-time fallbacks.
@@ -175,6 +189,10 @@ app_window: 'ApplicationWindow|None' = None  # handle to the main Artisan applic
 #   app_window.updatePlusIcon() is a function that updates the toolbar
 #   plus service connection indicator icon
 connected: bool = False  # connection status
+# whether the cloud backend requires authentication; in the MySpresso fork v1
+# this defaults to False (the backend has no auth yet). Resolved at import time
+# from MYSPRESSO_AUTH_ENABLED env > cloud/auth_enabled QSettings > default False.
+auth_enabled: bool = _resolve_auth_enabled()
 # the session token
 token: str|None = None
 # login nickname assigned on login with session token
