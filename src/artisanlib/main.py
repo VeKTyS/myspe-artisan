@@ -4449,26 +4449,14 @@ class ApplicationWindow(QMainWindow):
             ))
             return
 
-        # Build the full profile dict and serialize it as JSON (rather than
-        # the Python repr() form Artisan uses for the on-disk .alog file).
-        # The ZABAWA upload-roast Edge Function is JS/Deno: JSON.parse() on
-        # the alogContent succeeds for json.dumps output but not for repr()
-        # (single quotes / True / None are not valid JSON tokens).
-        import json as _json
+        # Build the full profile dict and serialize as Python repr() — that
+        # is the native .alog format Artisan writes via util.serialize() and
+        # what the ZABAWA upload-roast Edge Function's alog parser expects.
+        # Empirically verified: sending json.dumps(profile) yields HTTP 400
+        # "Unexpected token: false"; repr(profile) yields HTTP 201.
         try:
             profile = self.getProfile()
-
-            def _to_jsonable(o: object) -> object:
-                # Fallback for non-natively-serializable values (QDateTime
-                # objects, numpy scalars/arrays via __dict__, etc.).
-                try:
-                    return o.__dict__  # type: ignore[attr-defined]
-                except AttributeError:
-                    return str(o)
-
-            alog_content = _json.dumps(
-                profile, default=_to_jsonable, ensure_ascii=False
-            )
+            alog_content = repr(profile)
         except Exception as e:  # pylint: disable=broad-except
             _log.exception(e)
             self.sendmessage(QApplication.translate(
