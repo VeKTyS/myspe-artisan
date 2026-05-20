@@ -263,7 +263,7 @@ def connect(clear_on_failure: bool =False, interactive: bool = True) -> None:
                         )  # @UndefinedVariable
                         aw.sendmessageSignal.emit(
                             QApplication.translate(
-                                'Plus', 'Connected to artisan.plus'
+                                'Plus', 'Connected to MySpresso'
                             ),
                             True,
                             None,
@@ -281,7 +281,7 @@ def connect(clear_on_failure: bool =False, interactive: bool = True) -> None:
                         connection.clearCredentials()
                         aw.sendmessageSignal.emit(
                             QApplication.translate(
-                                'Plus', 'artisan.plus turned off'
+                                'Plus', 'MySpresso turned off'
                             ),
                             True,
                             None,
@@ -304,7 +304,7 @@ def connect(clear_on_failure: bool =False, interactive: bool = True) -> None:
                 if interactive and aw is not None:
                     aw.sendmessageSignal.emit(
                         QApplication.translate(
-                            'Plus', 'artisan.plus turned off'
+                            'Plus', 'MySpresso turned off'
                         ),
                         True,
                         None,
@@ -313,7 +313,7 @@ def connect(clear_on_failure: bool =False, interactive: bool = True) -> None:
                 if interactive:
                     aw.sendmessageSignal.emit(
                         QApplication.translate(
-                            'Plus', "Couldn't connect to artisan.plus"
+                            'Plus', "Couldn't connect to MySpresso"
                         ),
                         True,
                         None,
@@ -337,7 +337,7 @@ def connect(clear_on_failure: bool =False, interactive: bool = True) -> None:
 
 # show a dialog to have the user confirm the disconnect action
 def disconnect_confirmed() -> bool:
-    string = QApplication.translate('Plus', 'Disconnect artisan.plus?')
+    string = QApplication.translate('Plus', 'Disconnect MySpresso?')
     mbox = QMessageBox()
     mbox.setText(string)
     util.setPlusIcon(mbox)
@@ -379,7 +379,7 @@ def disconnect(
                 if remove_credentials:
                     aw.sendmessageSignal.emit(
                         QApplication.translate(
-                            'Plus', 'artisan.plus turned off'
+                            'Plus', 'MySpresso turned off'
                         ),
                         True,
                         None,
@@ -388,11 +388,11 @@ def disconnect(
                     aw.sendmessageSignal.emit(
                         (
                         QApplication.translate(
-                            'Plus', 'artisan.plus connection lost. Reconnecting automatically...'
+                            'Plus', 'MySpresso connection lost. Reconnecting automatically...'
                         )
                         if keepON else
                         QApplication.translate(
-                            'Plus', 'artisan.plus disconnected'
+                            'Plus', 'MySpresso disconnected'
                         )),
                         True,
                         None,
@@ -425,7 +425,7 @@ def reconnected() -> None:
             if aw is not None:
                 aw.sendmessageSignal.emit(
                     QApplication.translate(
-                        'Plus', 'artisan.plus reconnected'),
+                        'Plus', 'MySpresso reconnected'),
                     True,
                     None)
 
