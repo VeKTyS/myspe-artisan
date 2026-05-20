@@ -93,3 +93,39 @@ def test_web_base_url_falls_back_to_default(fake_qsettings):
     with patch('plus.config.QSettings', return_value=settings):
         from plus.config import _resolve_web_base_url
         assert _resolve_web_base_url() == 'http://localhost:3000'
+
+
+def test_auth_enabled_defaults_to_false(fake_qsettings):
+    settings, _store = fake_qsettings
+
+    with patch('plus.config.QSettings', return_value=settings):
+        from plus.config import _resolve_auth_enabled
+        assert _resolve_auth_enabled() is False
+
+
+def test_auth_enabled_true_from_env(monkeypatch, fake_qsettings):
+    settings, _store = fake_qsettings
+    monkeypatch.setenv('MYSPRESSO_AUTH_ENABLED', 'true')
+
+    with patch('plus.config.QSettings', return_value=settings):
+        from plus.config import _resolve_auth_enabled
+        assert _resolve_auth_enabled() is True
+
+
+def test_auth_enabled_false_from_env_overrides_qsettings(monkeypatch, fake_qsettings):
+    settings, store = fake_qsettings
+    store['cloud/auth_enabled'] = True
+    monkeypatch.setenv('MYSPRESSO_AUTH_ENABLED', 'false')
+
+    with patch('plus.config.QSettings', return_value=settings):
+        from plus.config import _resolve_auth_enabled
+        assert _resolve_auth_enabled() is False
+
+
+def test_auth_enabled_from_qsettings_when_env_unset(fake_qsettings):
+    settings, store = fake_qsettings
+    store['cloud/auth_enabled'] = True
+
+    with patch('plus.config.QSettings', return_value=settings):
+        from plus.config import _resolve_auth_enabled
+        assert _resolve_auth_enabled() is True
