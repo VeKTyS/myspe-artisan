@@ -4385,7 +4385,6 @@ class ApplicationWindow(QMainWindow):
     # feedback in the status bar instead of waiting on the persistqueue.
     def _pushRoastToMyspresso(self) -> None:
         import uuid as _uuid
-        import datetime as _dt
         from PyQt6.QtCore import QDateTime
         import plus.config as _pconfig
         import plus.connection as _pconn
@@ -4450,24 +4449,31 @@ class ApplicationWindow(QMainWindow):
             ))
             return
 
+        # Build the full profile dict and serialize as Python repr (.alog
+        # native format). The ZABAWA upload-roast Edge Function parses this
+        # server-side and threads it through sync_roast_log_to_ui_tables
+        # which handles inventory decrement based on parsed coffee/store.
+        try:
+            profile = self.getProfile()
+            alog_content = repr(profile)
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+            self.sendmessage(QApplication.translate(
+                'Plus', 'Echec de l\'envoi: impossible de sérialiser le profil ({})'
+            ).format(str(e)))
+            return
+
         payload = {
-            'roast_id': canonical_uuid,
-            'date': self.qmc.roastdate.toString('yyyy-MM-ddTHH:mm:sszzz'),
-            'amount': green_kg,
-            'start_weight': green_kg,
-            'end_weight': roasted_kg,
-            'label': self.qmc.title or 'Manual push',
-            'machine': self.qmc.roastertype or 'MANUAL',
-            'coffee': coffee,
-            'location': store,
-            'blend': None,
-            'modified_at': _dt.datetime.now(_dt.UTC).strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+            'id': canonical_uuid,
+            'alogContent': alog_content,
         }
+        url = f'{_pconfig.upload_roast_url}?strategy=overwrite&updateInventory=true'
+
         try:
             self.sendmessage(QApplication.translate(
                 'Plus', 'Envoi de la torréfaction sur MySpresso…'
             ))
-            r = _pconn.sendData(_pconfig.roast_url, payload, 'POST')
+            r = _pconn.sendData(url, payload, 'POST')
             if r is None:
                 self.sendmessage(QApplication.translate(
                     'Plus', 'Echec de l\'envoi: pas de réponse du serveur.'
@@ -4480,7 +4486,7 @@ class ApplicationWindow(QMainWindow):
             else:
                 self.sendmessage(QApplication.translate(
                     'Plus', 'Echec de l\'envoi: HTTP {} — {}'
-                ).format(r.status_code, r.text[:120]))
+                ).format(r.status_code, r.text[:150]))
         except Exception as e:  # pylint: disable=broad-except
             _log.exception(e)
             self.sendmessage(QApplication.translate(
