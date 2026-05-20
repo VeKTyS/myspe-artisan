@@ -4387,7 +4387,6 @@ class ApplicationWindow(QMainWindow):
         import uuid as _uuid
         from PyQt6.QtCore import QDateTime
         import plus.config as _pconfig
-        import plus.connection as _pconn
         import plus.controller as _pctl
 
         # Make sure we are connected (no-op when auth_enabled=False after
@@ -4470,16 +4469,24 @@ class ApplicationWindow(QMainWindow):
         }
         url = f'{_pconfig.upload_roast_url}?strategy=overwrite&updateInventory=true'
 
+        # POST directly via requests (not plus.connection.sendData) because
+        # the ZABAWA upload-roast Edge Function does NOT decompress gzipped
+        # bodies, and sendData auto-gzips when body > 500 bytes. Our alog
+        # payload is ~6KB so gzip would always trigger and yield HTTP 400
+        # "Invalid JSON body" (server reads gzip bytes as JSON).
+        import json as _json
+        import requests as _requests
         try:
+            body = _json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self.sendmessage(QApplication.translate(
                 'Plus', 'Envoi de la torréfaction sur MySpresso…'
             ))
-            r = _pconn.sendData(url, payload, 'POST')
-            if r is None:
-                self.sendmessage(QApplication.translate(
-                    'Plus', 'Echec de l\'envoi: pas de réponse du serveur.'
-                ))
-                return
+            r = _requests.post(
+                url,
+                data=body,
+                headers={'Content-Type': 'application/json; charset=utf-8'},
+                timeout=30,
+            )
             if 200 <= r.status_code < 300:
                 self.sendmessage(QApplication.translate(
                     'Plus', 'Torréfaction téléchargée avec succès sur MySpresso'
