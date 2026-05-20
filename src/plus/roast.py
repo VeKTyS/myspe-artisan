@@ -141,6 +141,18 @@ def getTemplate(bp: 'ProfileData', background:bool=False) -> dict[str, Any]:
         util.add2dict(bp, config.schedule_uuid_tag, d, 's_item_id')   # ScheduleItem UUID
         util.add2dict(bp, config.schedule_date_tag, d, 's_item_date') # ScheduleItem date (added to speed up search on server side)
 
+        # MySpresso fork: Artisan stores roast/schedule UUIDs in 32-char
+        # .hex form (no hyphens). The MySpresso backend validates UUIDs in
+        # canonical RFC 4122 form (with hyphens), so normalize before the
+        # payload is queued/pushed. uuid.UUID() accepts both forms.
+        import uuid as _uuid  # pylint: disable=import-outside-toplevel
+        for _k in ('id', 's_item_id'):
+            if _k in d and isinstance(d[_k], str) and d[_k]:
+                try:
+                    d[_k] = str(_uuid.UUID(d[_k]))
+                except (ValueError, TypeError):
+                    pass
+
         try:
             util.addNum2dict(bp, 'moisture_roasted', d, 'moisture', 0, 100, 1)
         except Exception as e:  # pylint: disable=broad-except
