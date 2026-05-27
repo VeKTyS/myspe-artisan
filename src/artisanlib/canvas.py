@@ -7078,7 +7078,7 @@ class tgraphcanvas(QObject):
             except Exception as e: # pylint: disable=broad-except
                 _log.exception(e)
 
-            # add Roast Properties
+            # add aq<roperties
             try:
                 # weight-in in g
                 mathdictionary['WEIGHTin'] = int(round(convertWeight(self.weight[0], weight_units.index(self.weight[2]),0)))

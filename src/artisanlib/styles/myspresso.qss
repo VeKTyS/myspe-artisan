@@ -448,12 +448,16 @@ QLabel[role="muted"] {
 /* === Cloud connection badge ========================================== */
 /* Text colour stays dark navy in both states — the leading dot (set via
    rich-text inline span in MySpressoHeader.set_connected) carries the
-   semantic green/red.  Background tints the badge subtly. */
+   semantic green/red.  Background tints the badge subtly.
+   Tight padding so the box hugs the text + radius 2px (MySpresso DA:
+   quasi-square cards). Soft drop-shadow added programmatically via
+   QGraphicsDropShadowEffect in MySpressoHeader.__init__ (QSS has no
+   box-shadow). */
 QLabel#cloudBadge[connected="true"] {
     background-color: #E0EFE5;
     color: #070D1F;
-    padding: 6px 12px;
-    border-radius: 12px;
+    padding: 3px 12px;
+    border-radius: 2px;
     font-weight: 700;
     font-size: 10px;
     letter-spacing: 0.05em;
@@ -461,8 +465,8 @@ QLabel#cloudBadge[connected="true"] {
 QLabel#cloudBadge[connected="false"] {
     background-color: #F2D6D2;
     color: #070D1F;
-    padding: 6px 12px;
-    border-radius: 12px;
+    padding: 3px 12px;
+    border-radius: 2px;
     font-weight: 700;
     font-size: 10px;
     letter-spacing: 0.05em;

@@ -56,7 +56,7 @@ from uic import MeasureDialog # pyright: ignore[attr-defined] # pylint: disable=
 _log: Final[logging.Logger] = logging.getLogger(__name__)
 
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QRegularExpression, QSettings, QTimer, QEvent, QLocale, QSignalBlocker
-from PyQt6.QtGui import QColor, QIntValidator, QRegularExpressionValidator, QKeySequence, QPalette
+from PyQt6.QtGui import QColor, QCursor, QIntValidator, QRegularExpressionValidator, QKeySequence, QPalette
 from PyQt6.QtWidgets import (QApplication, QWidget, QCheckBox, QComboBox, QDialogButtonBox, QGridLayout,
                              QHBoxLayout, QVBoxLayout, QHeaderView, QLabel, QLineEdit, QTextEdit, QListView,
                              QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QTabWidget, QSizePolicy,
@@ -86,6 +86,144 @@ def _make_roast_section(n: str, text: str) -> QLabel:
         ' background: transparent; }'
     )
     return label
+
+
+def _field_label(text: str) -> QLabel:
+    """Left-side form label in the Roast Properties grid — navy bold 13px,
+    matches the "Date / Titre / Stock / Grains / Poids / …" column in the
+    mockup."""
+    label = QLabel(text)
+    label.setStyleSheet(
+        'QLabel { font-size: 13px; font-weight: 700; color: #070D1F;'
+        ' background: transparent; padding-right: 12px; }'
+    )
+    label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    return label
+
+
+def _col_header(text: str) -> QLabel:
+    """Small uppercase red column header — VERT / TORRÉFIÉ / ENTIER / MOULU
+    / HUMIDITÉ / TEMPÉRATURE / PRESSION."""
+    label = QLabel(text.upper())
+    label.setStyleSheet(
+        'QLabel { font-size: 10px; font-weight: 700; color: #A8392E;'
+        ' letter-spacing: 0.8px; background: transparent; }'
+    )
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    return label
+
+
+def _suffix_tile(text: str) -> QLabel:
+    """Warm-bg suffix tile placed at the right of a numeric input — shows
+    units like kg / g/l / % / l / °C / hPa / /64" / agtron."""
+    label = QLabel(text)
+    label.setStyleSheet(
+        'QLabel { font-size: 12px; color: #4E4A44;'
+        ' background-color: #F2EFE7;'
+        ' border: 1px solid #E8E3D6; border-radius: 2px;'
+        ' padding: 4px 10px; min-width: 28px; }'
+    )
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    return label
+
+
+def _readonly_pill(text: str) -> QLabel:
+    """Warm-bg readonly value pill — used for the Date field which is
+    computed-only, no user input. Matches the wider warm box shown for
+    Date in the mockup."""
+    label = QLabel(text)
+    label.setStyleSheet(
+        'QLabel { font-size: 13px; color: #070D1F; font-weight: 500;'
+        ' background-color: #F2EFE7;'
+        ' border: 1px solid #E8E3D6; border-radius: 2px;'
+        ' padding: 6px 12px; }'
+    )
+    label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    return label
+
+
+def _wrap_input_with_suffix(input_widget: QWidget, suffix: str) -> QWidget:
+    """Compose an input + suffix tile in a horizontal pair, returning a
+    container QWidget the parent layout can place as a unit. The suffix
+    sits flush to the input's right edge per the mockup."""
+    container = QWidget()
+    container.setStyleSheet('QWidget { background: transparent; }')
+    h = QHBoxLayout(container)
+    h.setContentsMargins(0, 0, 0, 0)
+    h.setSpacing(6)
+    h.addWidget(input_widget, 1)
+    h.addWidget(_suffix_tile(suffix), 0)
+    return container
+
+
+def _dashed_placeholder(glyph: str = '◇') -> QLabel:
+    """Diamond glyph in a dashed-border tile — represents the "Défauts Vert"
+    column in the mockup (no input there, just a placeholder marker)."""
+    label = QLabel(glyph)
+    label.setStyleSheet(
+        'QLabel { font-size: 14px; color: #A8A092;'
+        ' background-color: transparent;'
+        ' border: 1px dashed #D4CCBA; border-radius: 2px;'
+        ' padding: 6px 12px; }'
+    )
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    return label
+
+
+def _small_pm_button(text: str) -> QPushButton:
+    """Compact + or − button (40px-ish), outlined warm, matches the small
+    increment/decrement buttons next to the Titre field in the mockup."""
+    btn = QPushButton(text)
+    btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+    btn.setFixedWidth(40)
+    btn.setStyleSheet(
+        'QPushButton { background-color: #FFFFFF; color: #070D1F;'
+        ' border: 1px solid #D4CCBA; border-radius: 2px;'
+        ' font-size: 14px; font-weight: 600;'
+        ' padding: 6px 0px; min-width: 40px; }'
+        'QPushButton:hover { background-color: #FAF8F4; }'
+        'QPushButton:pressed { background-color: #F2EFE7; }'
+    )
+    return btn
+
+
+def _make_grains_card(beansedit: QWidget) -> QWidget:
+    """Wrap the existing beansedit QTextEdit in a dark-brown card matching
+    the "Grains" block in the mockup. The QTextEdit keeps its content +
+    edit behaviour, just nested inside a styled container."""
+    card = QFrame()
+    card.setObjectName('MysGrainsCard')
+    card.setStyleSheet(
+        '#MysGrainsCard {'
+        ' background-color: #2E2B27;'
+        ' border: 1px solid #2E2B27;'
+        ' border-radius: 2px;'
+        '}'
+    )
+    inner = QVBoxLayout(card)
+    inner.setContentsMargins(18, 14, 18, 14)
+    inner.setSpacing(8)
+
+    # Kicker label "LOT SÉLECTIONNÉ" in red-brick uppercase.
+    kicker = QLabel('LOT SÉLECTIONNÉ')
+    kicker.setStyleSheet(
+        'QLabel { font-size: 10px; font-weight: 700; color: #C66459;'
+        ' letter-spacing: 0.8px; background: transparent; }'
+    )
+    inner.addWidget(kicker)
+
+    # The QTextEdit body — styled to read as the dark card content.
+    beansedit.setStyleSheet(
+        'QTextEdit { background-color: transparent;'
+        ' color: #FAF8F4; border: none; padding: 0;'
+        ' font-size: 14px; font-weight: 600;'
+        ' selection-background-color: #5E3C30;'
+        ' selection-color: #FAF8F4; }'
+    )
+    inner.addWidget(beansedit, 1)
+
+    return card
 
 
 ########################################################################################
@@ -1622,24 +1760,40 @@ class editGraphDlg(ArtisanResizeablDialog):
         databuttonLayout.addWidget(self.copydataTableButton)
         databuttonLayout.addStretch()
         #tab 1
-        # MySpresso fork: break the dense grid into numbered sections per the
-        # Claude Design "Propriétés de la torréfaction" mockup. Section
-        # headers are rich-text QLabels with a red mono number + uppercase
-        # navy title + thin warm bottom divider — matches the SectionHeader
-        # component from dialogs.jsx.
+        # MySpresso fork: full pixel-perfect reproduction of the Claude
+        # Design "Propriétés de la torréfaction" mockup. Builds a fresh
+        # QVBoxLayout that re-parents every Artisan widget into the design's
+        # positions (Identification / Poids & Grains / Conditions Ambiantes).
+        # The legacy textLayout / propGrid / ambientGrid become orphans and
+        # are not used (Qt auto-removes widgets when added to another layout).
+        # NOTE: `dateedit` was created as a local QLabel in this __init__
+        # scope (line ~881). We need it to survive — capture before _build.
+        self._mys_dateedit_ref = dateedit  # the QLabel showing roastdate
+        self._mys_updateAmbientTemp_ref = updateAmbientTemp  # "update" button
         self.tab1aLayout = QVBoxLayout()
-        self.tab1aLayout.setContentsMargins(0,0,0,0)
-        self.tab1aLayout.setSpacing(10)
-        self.tab1aLayout.addWidget(_make_roast_section('01', 'Identification'))
-        self.tab1aLayout.addLayout(textLayout)
-        self.tab1aLayout.addWidget(_make_roast_section('02', 'Poids & Grains'))
-        self.tab1aLayout.addLayout(propGrid)
-        self.tab1aLayout.addWidget(_make_roast_section('03', 'Conditions ambiantes'))
-        self.tab1aLayout.addLayout(ambientGrid)
+        self.tab1aLayout.setContentsMargins(0, 0, 0, 0)
+        self.tab1aLayout.setSpacing(8)
+        self._build_myspresso_tab1(self.tab1aLayout)
+        # MySpresso fork: wrap the tab content in a QScrollArea so the
+        # dialog can be shrunk to fit any screen — the form scrolls when
+        # the window is smaller than its sizeHint.
+        from PyQt6.QtWidgets import QScrollArea as _QScrollArea  # noqa: PLC0415
+        _tab1_inner = QWidget()
+        _tab1_inner.setLayout(self.tab1aLayout)
+        _tab1_scroll = _QScrollArea()
+        _tab1_scroll.setObjectName('MysRoastScroll')
+        _tab1_scroll.setWidgetResizable(True)
+        _tab1_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        _tab1_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        _tab1_scroll.setStyleSheet(
+            'QScrollArea#MysRoastScroll { background: transparent; border: 0; }'
+            'QScrollArea#MysRoastScroll > QWidget > QWidget {'
+            ' background: transparent; }'
+        )
+        _tab1_scroll.setWidget(_tab1_inner)
         tab1Layout = QVBoxLayout()
-#        tab1Layout.addStretch()
-        tab1Layout.setContentsMargins(5, 5, 5, 2) # left, top, right, bottom
-        tab1Layout.addLayout(self.tab1aLayout)
+        tab1Layout.setContentsMargins(20, 12, 20, 12) # generous margins matching the mockup
+        tab1Layout.addWidget(_tab1_scroll)
         tab1Layout.setSpacing(0)
 #        tab1Layout.addStretch()
         # set volume from density if given
@@ -1710,10 +1864,23 @@ class editGraphDlg(ArtisanResizeablDialog):
         _ms_header_layout = QHBoxLayout(_ms_header)
         _ms_header_layout.setContentsMargins(20, 16, 20, 16)
         _ms_header_layout.setSpacing(12)
-        _ms_icon = QLabel('☕')
-        _ms_icon.setStyleSheet(
-            'QLabel { font-size: 22px; color: #A8392E; background: transparent; }'
-        )
+        # Coffee-cup icon from the Claude Design handoff (MysLogoMark SVG).
+        _ms_icon = QLabel()
+        _ms_icon.setStyleSheet('QLabel { background: transparent; }')
+        try:
+            import os.path as _osp
+            from PyQt6.QtGui import QPixmap as _QPixmap
+            _icon_path = _osp.normpath(_osp.join(
+                _osp.dirname(_osp.realpath(__file__)),
+                '..', 'icons', 'myspresso', 'coffee-cup.svg',
+            ))
+            _pm = _QPixmap(_icon_path)
+            if not _pm.isNull():
+                _ms_icon.setPixmap(_pm.scaledToHeight(
+                    32, Qt.TransformationMode.SmoothTransformation,
+                ))
+        except Exception:  # noqa: BLE001
+            pass
         _ms_header_layout.addWidget(_ms_icon)
         _ms_title_block = QVBoxLayout()
         _ms_title_block.setSpacing(2)
@@ -1748,6 +1915,22 @@ class editGraphDlg(ArtisanResizeablDialog):
             self.aw.qmc.plus_beans_reminder_on_start = False # prevent this warning to be shown again for this recording
 
         self.setLayout(totallayout)
+
+        # MySpresso fork: cap the dialog at ~70% of the current screen
+        # before the first show, so it never overflows on laptops. The
+        # internal QScrollArea on tab1 lets the form scroll when constrained.
+        try:
+            from PyQt6.QtGui import QGuiApplication as _QGuiApp  # noqa: PLC0415
+            _screen = (self.screen() if hasattr(self, 'screen') else None) \
+                or _QGuiApp.primaryScreen()
+            if _screen is not None:
+                _avail = _screen.availableGeometry()
+                _w = min(750, int(_avail.width() * 0.70))
+                _h = int(_avail.height() * 0.70)
+                self.resize(_w, _h)
+                self.setMaximumHeight(_avail.height())
+        except Exception:  # noqa: BLE001
+            pass
 
         self.populatePlusCoffeeBlendCombos()
 
@@ -2711,6 +2894,269 @@ class editGraphDlg(ArtisanResizeablDialog):
             self.aw.qmc.adderror((QApplication.translate('Error Message', 'Exception:') + ' addRecentRoast(): {0}').format(str(e)),getattr(exc_tb, 'tb_lineno', '?'))
 
 
+
+    # ─────────────────────────────────────────────────────────────────────
+    # MySpresso fork — pixel-perfect Roast Properties layout
+    # ─────────────────────────────────────────────────────────────────────
+
+    def _build_myspresso_tab1(self, root: QVBoxLayout) -> None:
+        """Assemble the Roast tab content to match the Claude Design mockup.
+
+        Re-parents Artisan's existing widgets (titleedit / weightinedit /
+        bean_density_in_edit / ambientedit / …) into the three numbered
+        sections of the design. Never invents placeholder data — fields
+        without an Artisan equivalent are simply omitted.
+
+        Side effect handled at the end: upstream Artisan creates a few
+        parentless QFrame containers (e.g. `plusLineStoresFrame`) that
+        used to be nested inside the legacy `textLayout`/`propGrid` we no
+        longer use. Without an explicit parent they pop up as orphan
+        top-level windows once `plus_account` is set. We hide / reparent
+        them defensively at the bottom of this method.
+        """
+        # ── 01 · IDENTIFICATION ────────────────────────────────────────────
+        root.addWidget(_make_roast_section('01', 'Identification'))
+
+        # Row: Date (readonly pill, mock-faithful) + Batch (right column)
+        id_grid = QGridLayout()
+        id_grid.setHorizontalSpacing(16)
+        id_grid.setVerticalSpacing(10)
+        id_grid.setContentsMargins(0, 4, 0, 0)
+        id_grid.setColumnStretch(1, 3)
+        id_grid.setColumnStretch(4, 1)
+
+        id_grid.addWidget(_field_label(QApplication.translate('Label', 'Date')), 0, 0)
+        if self._mys_dateedit_ref is not None:
+            self._mys_dateedit_ref.setStyleSheet(
+                'QLabel { font-size: 13px; color: #070D1F; font-weight: 500;'
+                ' background-color: #F2EFE7;'
+                ' border: 1px solid #E8E3D6; border-radius: 2px;'
+                ' padding: 6px 12px; }'
+            )
+            id_grid.addWidget(self._mys_dateedit_ref, 0, 1, 1, 2)
+        # Right column 0,3 — Batch label + batch widgets if available
+        id_grid.addWidget(_field_label(QApplication.translate('Label', 'Lot')), 0, 3)
+        if self.batchcounterSpinBox is not None:
+            batch_row = QWidget()
+            batch_row.setStyleSheet('QWidget { background: transparent; }')
+            bh = QHBoxLayout(batch_row)
+            bh.setContentsMargins(0, 0, 0, 0)
+            bh.setSpacing(6)
+            bh.addWidget(self.batchcounterSpinBox, 1)
+            if self.batchprefixedit is not None:
+                bh.addWidget(self.batchprefixedit, 0)
+            id_grid.addWidget(batch_row, 0, 4)
+        elif hasattr(self, 'batchedit'):
+            # Fallback: use the existing batchedit (ClickableQLabel)
+            self.batchedit.setStyleSheet(
+                'QLabel { font-size: 13px; color: #070D1F; font-weight: 500;'
+                ' background-color: #F2EFE7;'
+                ' border: 1px solid #E8E3D6; border-radius: 2px;'
+                ' padding: 6px 12px; }'
+            )
+            id_grid.addWidget(self.batchedit, 0, 4)
+
+        # Row: Titre (titleedit combo, spans wide) + +/- buttons
+        id_grid.addWidget(_field_label(QApplication.translate('Label', 'Title')), 1, 0)
+        id_grid.addWidget(self.titleedit, 1, 1, 1, 2)
+        # Increment / decrement helpers — wire to batchcounter when present.
+        plus_btn = _small_pm_button('+')
+        minus_btn = _small_pm_button('−')
+        if self.batchcounterSpinBox is not None:
+            plus_btn.clicked.connect(self.batchcounterSpinBox.stepUp)
+            minus_btn.clicked.connect(self.batchcounterSpinBox.stepDown)
+        pm_box = QWidget()
+        pm_box.setStyleSheet('QWidget { background: transparent; }')
+        pm_h = QHBoxLayout(pm_box)
+        pm_h.setContentsMargins(0, 0, 0, 0)
+        pm_h.setSpacing(6)
+        pm_h.addWidget(plus_btn)
+        pm_h.addWidget(minus_btn)
+        pm_h.addStretch()
+        id_grid.addWidget(pm_box, 1, 4)
+
+        # Row: Stock (plus_coffees_combo) + Magasin (plus_stores_combo)
+        if hasattr(self, 'plus_coffees_combo'):
+            id_grid.addWidget(_field_label(QApplication.translate('Label', 'Stock')), 2, 0)
+            stock_box = QWidget()
+            stock_box.setStyleSheet('QWidget { background: transparent; }')
+            sh = QHBoxLayout(stock_box)
+            sh.setContentsMargins(0, 0, 0, 0)
+            sh.setSpacing(6)
+            sh.addWidget(self.plus_coffees_combo, 1)
+            if hasattr(self, 'plus_blends_combo'):
+                sh.addWidget(self.plus_blends_combo, 1)
+            if hasattr(self, 'plus_custom_blend_button'):
+                self.plus_custom_blend_button.setStyleSheet(
+                    'QToolButton { background-color: #FFFFFF;'
+                    ' color: #070D1F; border: 1px solid #D4CCBA;'
+                    ' border-radius: 2px; padding: 4px 10px;'
+                    ' min-width: 28px; font-size: 13px; }'
+                    'QToolButton:hover { background-color: #FAF8F4; }'
+                )
+                sh.addWidget(self.plus_custom_blend_button)
+            id_grid.addWidget(stock_box, 2, 1, 1, 2)
+            id_grid.addWidget(_field_label(QApplication.translate('Label', 'Store')), 2, 3)
+            id_grid.addWidget(self.plus_stores_combo, 2, 4)
+
+        # Row: Grains label + dark card wrapping beansedit
+        id_grid.addWidget(_field_label(QApplication.translate('Label', 'Beans')), 3, 0,
+                          Qt.AlignmentFlag.AlignTop)
+        # Tightened (was 96) so the dialog fits laptop screens by default.
+        self.beansedit.setMinimumHeight(60)
+        self.beansedit.setMaximumHeight(140)
+        id_grid.addWidget(_make_grains_card(self.beansedit), 3, 1, 1, 4)
+
+        root.addLayout(id_grid)
+
+        # ── 02 · POIDS & GRAINS ───────────────────────────────────────────
+        root.addWidget(_make_roast_section('02', 'Poids & Grains'))
+
+        pg = QGridLayout()
+        pg.setHorizontalSpacing(12)
+        pg.setVerticalSpacing(8)
+        pg.setContentsMargins(0, 4, 0, 0)
+
+        # Left half columns:  0=label  1=Vert  2=Torréfié  3=suffix/unit
+        # Right half columns: 5=label  6=val1  7=val2  8=suffix
+        pg.setColumnMinimumWidth(4, 32)  # gutter
+
+        pg.addWidget(_col_header('Vert'), 0, 1)
+        pg.addWidget(_col_header('Torréfié'), 0, 2)
+
+        # Poids (weight in/out + units combo)
+        pg.addWidget(_field_label(QApplication.translate('Label', 'Weight')), 1, 0)
+        pg.addWidget(self.weightinedit, 1, 1)
+        pg.addWidget(self.weightoutedit, 1, 2)
+        pg.addWidget(self.unitsComboBox, 1, 3)
+
+        # Défauts — left placeholder (no Vert defects) + weightoutdefectsedit
+        pg.addWidget(_field_label(QApplication.translate('Label', 'Defects')), 2, 0)
+        pg.addWidget(_dashed_placeholder('◇'), 2, 1)
+        pg.addWidget(self.weightoutdefectsedit, 2, 2)
+        if hasattr(self, 'weightoutdefects_unit_label'):
+            self.weightoutdefects_unit_label.setStyleSheet(
+                'QLabel { font-size: 12px; color: #4E4A44;'
+                ' background-color: #F2EFE7;'
+                ' border: 1px solid #E8E3D6; border-radius: 2px;'
+                ' padding: 4px 10px; min-width: 28px; }'
+            )
+            self.weightoutdefects_unit_label.setAlignment(
+                Qt.AlignmentFlag.AlignCenter,
+            )
+            pg.addWidget(self.weightoutdefects_unit_label, 2, 3)
+
+        # Volume (in/out + units combo) + percent label trailing
+        pg.addWidget(_field_label(QApplication.translate('Label', 'Volume')), 3, 0)
+        pg.addWidget(self.volumeinedit, 3, 1)
+        pg.addWidget(self.volumeoutedit, 3, 2)
+        pg.addWidget(self.volumeUnitsComboBox, 3, 3)
+        if hasattr(self, 'volumepercentlabel'):
+            self.volumepercentlabel.setStyleSheet(
+                'QLabel { font-size: 12px; color: #7A736A;'
+                ' background: transparent; padding: 0 8px; }'
+            )
+
+        # Densité (bean_density)
+        pg.addWidget(_field_label(QApplication.translate('Label', 'Density')), 4, 0)
+        pg.addWidget(self.bean_density_in_edit, 4, 1)
+        pg.addWidget(self.bean_density_out_edit, 4, 2)
+        pg.addWidget(_suffix_tile('g/l'), 4, 3)
+
+        # Humidité (moisture greens/roasted)
+        pg.addWidget(_field_label(QApplication.translate('Label', 'Moisture')), 5, 0)
+        pg.addWidget(self.moisture_greens_edit, 5, 1)
+        pg.addWidget(self.moisture_roasted_edit, 5, 2)
+        pg.addWidget(_suffix_tile('%'), 5, 3)
+
+        # Right column block: Screen, Grains (T°)
+        pg.setColumnMinimumWidth(5, 16)  # gutter
+        pg.addWidget(_field_label(QApplication.translate('Label', 'Screen')), 1, 6)
+        screen_box = QWidget()
+        screen_box.setStyleSheet('QWidget { background: transparent; }')
+        sb = QHBoxLayout(screen_box)
+        sb.setContentsMargins(0, 0, 0, 0)
+        sb.setSpacing(6)
+        if hasattr(self, 'bean_size_min_edit'):
+            # Loosen the upstream 25px width clamp so the design's wider
+            # field renders properly.
+            self.bean_size_min_edit.setMaximumWidth(60)
+            self.bean_size_min_edit.setMinimumWidth(40)
+            sb.addWidget(self.bean_size_min_edit)
+        if hasattr(self, 'bean_size_max_edit'):
+            self.bean_size_max_edit.setMaximumWidth(60)
+            self.bean_size_max_edit.setMinimumWidth(40)
+            sb.addWidget(self.bean_size_max_edit)
+        sb.addWidget(_suffix_tile('/64"'))
+        sb.addStretch()
+        pg.addWidget(screen_box, 1, 7, 1, 2)
+
+        pg.addWidget(_field_label(QApplication.translate('Label', 'Beans Temp')), 2, 6)
+        beans_temp_box = QWidget()
+        beans_temp_box.setStyleSheet('QWidget { background: transparent; }')
+        btb = QHBoxLayout(beans_temp_box)
+        btb.setContentsMargins(0, 0, 0, 0)
+        btb.setSpacing(6)
+        if hasattr(self, 'greens_temp_edit'):
+            self.greens_temp_edit.setMaximumWidth(80)
+            btb.addWidget(self.greens_temp_edit)
+        # Temperature unit follows qmc.mode (°F / °C)
+        _temp_unit = '°' + str(getattr(self.aw.qmc, 'mode', 'F'))
+        btb.addWidget(_suffix_tile(_temp_unit))
+        btb.addStretch()
+        pg.addWidget(beans_temp_box, 2, 7, 1, 2)
+
+        # Sub-headers: ENTIER / MOULU + Couleur row
+        pg.addWidget(_col_header('Entier'), 6, 1)
+        pg.addWidget(_col_header('Moulu'), 6, 2)
+
+        pg.addWidget(_field_label(QApplication.translate('Label', 'Color')), 7, 0)
+        pg.addWidget(self.whole_color_edit, 7, 1)
+        pg.addWidget(self.ground_color_edit, 7, 2)
+        # ColorSystem combobox → wraps with the suffix-style "agtron" affordance.
+        pg.addWidget(self.colorSystemComboBox, 7, 3, 1, 6)
+
+        root.addLayout(pg)
+
+        # ── 03 · CONDITIONS AMBIANTES ─────────────────────────────────────
+        root.addWidget(_make_roast_section('03', 'Conditions ambiantes'))
+
+        amb = QGridLayout()
+        amb.setHorizontalSpacing(12)
+        amb.setVerticalSpacing(6)
+        amb.setContentsMargins(0, 4, 0, 0)
+
+        amb.addWidget(_col_header('Humidité'), 0, 1)
+        amb.addWidget(_col_header('Température'), 0, 2)
+        amb.addWidget(_col_header('Pression'), 0, 3)
+
+        amb.addWidget(_field_label(QApplication.translate('Label', 'Mesures')), 1, 0)
+        # humidity + % suffix
+        amb.addWidget(_wrap_input_with_suffix(self.ambient_humidity_edit, '%'), 1, 1)
+        amb.addWidget(_wrap_input_with_suffix(self.ambientedit, _temp_unit), 1, 2)
+        amb.addWidget(_wrap_input_with_suffix(self.pressureedit, 'hPa'), 1, 3)
+
+        # Update button (reuses Artisan's existing slot)
+        if self._mys_updateAmbientTemp_ref is not None:
+            self._mys_updateAmbientTemp_ref.setText(
+                '↻  ' + QApplication.translate('Button', 'update').upper(),
+            )
+            self._mys_updateAmbientTemp_ref.setStyleSheet(
+                'QPushButton { background-color: #FFFFFF; color: #070D1F;'
+                ' border: 1px solid #D4CCBA; border-radius: 2px;'
+                ' padding: 6px 14px; font-weight: 600;'
+                ' letter-spacing: 0.5px; }'
+                'QPushButton:hover { background-color: #FAF8F4; }'
+                'QPushButton:pressed { background-color: #F2EFE7; }'
+            )
+            amb.addWidget(self._mys_updateAmbientTemp_ref, 1, 4)
+
+        amb.setColumnStretch(1, 1)
+        amb.setColumnStretch(2, 1)
+        amb.setColumnStretch(3, 1)
+
+        root.addLayout(amb)
+        root.addStretch(1)
 
     # called on CANCEL or WINDOW_CLOSE; reverts state and calls clean_up_and_close()
     @pyqtSlot()

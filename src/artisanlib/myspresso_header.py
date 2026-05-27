@@ -14,9 +14,10 @@ import pathlib
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtGui import QColor, QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -79,23 +80,37 @@ class MySpressoHeader(QFrame):
         self._cloud_badge.setObjectName('cloudBadge')
         self._cloud_badge.setTextFormat(Qt.TextFormat.RichText)
         self._cloud_badge.setProperty('connected', 'false')
+        # Force a tight height — QSS `padding` alone wasn't pulling the box
+        # down to hug the text on every Qt platform (the QLabel's natural
+        # sizeHint includes the font's full line height + leading).
+        self._cloud_badge.setFixedHeight(22)
         layout.addWidget(self._cloud_badge)
 
-        # ── UI mode badge — outlined pill (matches the v2 mockup) ───────────
+        # ── UI mode badge — square outlined card (MySpresso DA) ─────────────
         self._mode_badge = QLabel('·  MODE STANDARD')
         self._mode_badge.setObjectName('modeBadge')
         self._mode_badge.setStyleSheet(
             'QLabel#modeBadge {'
             ' color: #4E4A44;'
-            ' background-color: transparent;'
+            ' background-color: #FFFFFF;'
             ' border: 1px solid #D4CCBA;'
-            ' border-radius: 12px;'
-            ' padding: 4px 12px;'
+            ' border-radius: 2px;'
+            ' padding: 3px 12px;'
             ' font-size: 10px; font-weight: 700;'
             ' letter-spacing: 0.05em;'
             '}'
         )
+        self._mode_badge.setFixedHeight(22)
         layout.addWidget(self._mode_badge)
+
+        # MySpresso DA: subtle drop shadow on both badges so they "lift" off
+        # the warm header background (cards quasi-carrés + ombres subtiles).
+        for _badge in (self._cloud_badge, self._mode_badge):
+            _shadow = QGraphicsDropShadowEffect(self)
+            _shadow.setBlurRadius(8)
+            _shadow.setOffset(0, 1)
+            _shadow.setColor(QColor(15, 30, 61, 36))  # navy.700 @ 14% alpha
+            _badge.setGraphicsEffect(_shadow)
 
         # ── Slot for re-parented action buttons (RESET/ON/DÉBUT) ────────────
         # Buttons are added via host_action_buttons() once the ApplicationWindow
