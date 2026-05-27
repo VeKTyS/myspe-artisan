@@ -87,9 +87,13 @@ class Login(ArtisanDialog):
             self.ok_button.setFocusPolicy(
                 Qt.FocusPolicy.StrongFocus
             )
+            # MySpresso fork: navy primary style for the OK action
+            self.ok_button.setProperty('role', 'primary')
         self.cancel_button = self.dialogbuttons.button(QDialogButtonBox.StandardButton.Cancel)
         if self.cancel_button is not None:
             self.cancel_button.setDefault(True)
+            # MySpresso fork: secondary outline style for Cancel
+            self.cancel_button.setProperty('role', 'secondary')
             # add additional CMD-. shortcut to close the dialog
             self.cancel_button.setShortcut(
                 QKeySequence('Ctrl+.')

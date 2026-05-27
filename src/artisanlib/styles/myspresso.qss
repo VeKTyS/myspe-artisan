@@ -1,0 +1,773 @@
+/* ────────────────────────────────────────────────────────────────────
+ * MySpresso Artisan — global QSS stylesheet
+ *
+ * Loaded once at application startup by artisanlib.styles.apply_myspresso_stylesheet().
+ * Dark mode rules use [theme="dark"] selectors; the loader toggles
+ * QApplication's `theme` dynamic property based on system colour scheme.
+ *
+ * Selectors prefer property-based ([role="primary"]) over object names so
+ * that any QPushButton can be opted-in with `btn.setProperty("role", ...)`
+ * without renaming widgets across the codebase.
+ *
+ * Source of truth for colour values: artisanlib/design_tokens.py.
+ * Keep both files in sync.
+ * ──────────────────────────────────────────────────────────────────── */
+
+
+/* === Window & defaults =============================================== */
+QWidget {
+    background-color: #FAF8F4;        /* warm.100 */
+    color: #070D1F;                   /* navy.900 */
+    font-family: "Montserrat", "Inter", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+    font-size: 13px;
+}
+
+QMainWindow,
+QDialog {
+    background-color: #FAF8F4;
+}
+
+
+/* === Buttons · Default (no role property) ============================ */
+/* Generic baseline for the hundreds of buttons inside dialogs (including
+ * those nested in QGroupBox, QFrame, QTabWidget, etc.). Applied to any
+ * QPushButton that's a descendant of a QDialog OR a QGroupBox — covers
+ * the legacy macOS-native rounded look that leaks through when the QSS
+ * doesn't otherwise match. Buttons with inline setStyleSheet override
+ * this (Artisan's pushbuttonstyles dict, etc.). Role-tagged buttons
+ * (primary/secondary/danger) take precedence too. */
+QDialog QPushButton,
+QGroupBox QPushButton,
+QTabWidget QPushButton,
+QFrame QPushButton {
+    background-color: #FFFFFF;
+    color: #070D1F;
+    border: 1px solid #D4CCBA;
+    border-radius: 2px;
+    padding: 6px 14px;
+    min-width: 72px;
+    font-weight: 600;
+}
+QDialog QPushButton:hover,
+QGroupBox QPushButton:hover,
+QTabWidget QPushButton:hover,
+QFrame QPushButton:hover         { background-color: #FAF8F4; }
+QDialog QPushButton:pressed,
+QGroupBox QPushButton:pressed,
+QTabWidget QPushButton:pressed,
+QFrame QPushButton:pressed       { background-color: #F2EFE7; }
+QDialog QPushButton:disabled,
+QGroupBox QPushButton:disabled,
+QTabWidget QPushButton:disabled,
+QFrame QPushButton:disabled      { color: #A8A092; border-color: #E8E3D6; }
+QDialog QPushButton:default,
+QGroupBox QPushButton:default,
+QTabWidget QPushButton:default,
+QFrame QPushButton:default {
+    background-color: #0F1E3D;
+    color: #FFFFFF;
+    border-color: #0F1E3D;
+}
+QDialog QPushButton:default:hover,
+QGroupBox QPushButton:default:hover,
+QTabWidget QPushButton:default:hover,
+QFrame QPushButton:default:hover { background-color: #0A1733; }
+QDialog QPushButton:default:pressed,
+QGroupBox QPushButton:default:pressed,
+QTabWidget QPushButton:default:pressed,
+QFrame QPushButton:default:pressed { background-color: #070D1F; }
+
+
+/* === Buttons · Primary =============================================== */
+QPushButton[role="primary"] {
+    background-color: #0F1E3D;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 2px;
+    padding: 10px 18px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+QPushButton[role="primary"]:hover    { background-color: #0A1733; }
+QPushButton[role="primary"]:pressed  { background-color: #070D1F; }
+QPushButton[role="primary"]:disabled {
+    background-color: #F2EFE7;
+    color: #A8A092;
+}
+QPushButton[role="primary"]:focus {
+    outline: none;
+    border: 2px solid #0F1E3D;
+    padding: 8px 16px;
+}
+
+
+/* === Buttons · Destructive (DROP, dangerous actions) ================= */
+QPushButton[role="danger"] {
+    background-color: #A8392E;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 2px;
+    padding: 10px 18px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+QPushButton[role="danger"]:hover    { background-color: #8E2F26; }
+QPushButton[role="danger"]:pressed  { background-color: #7A2A21; }
+QPushButton[role="danger"]:disabled { background-color: #F2EFE7; color: #A8A092; }
+
+
+/* === Buttons · Secondary (outlined) ================================== */
+QPushButton[role="secondary"] {
+    background-color: #FFFFFF;
+    color: #070D1F;
+    border: 1px solid #D4CCBA;
+    border-radius: 2px;
+    padding: 10px 16px;
+    font-weight: 600;
+}
+QPushButton[role="secondary"]:hover    { background-color: #FAF8F4; }
+QPushButton[role="secondary"]:pressed  { background-color: #F2EFE7; }
+QPushButton[role="secondary"]:disabled { color: #A8A092; border-color: #E8E3D6; }
+
+
+/* === Buttons · Event (CHARGE, DRY, FCs, FCe, SCs, SCe, COOL, DROP) === */
+/* Match Artisan's existing pushbuttonstyles state names via role+state.
+ * The Python side calls setProperty("role","event") + setProperty("state",...)
+ * then style().polish() to refresh.                                       */
+
+QPushButton[role="event"] {
+    background-color: #F2EFE7;
+    color: #0F1E3D;
+    border: 1px solid #D4CCBA;
+    border-radius: 2px;
+    padding: 8px 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 12px;
+}
+QPushButton[role="event"]:hover    { background-color: #E8E3D6; }
+QPushButton[role="event"]:pressed  { background-color: #D4CCBA; }
+QPushButton[role="event"]:disabled { color: #A8A092; }
+QPushButton[role="event"][state="active"]  { background-color: #0F1E3D; color: #FFFFFF; border-color: #0F1E3D; }
+QPushButton[role="event"][state="charge"]  { background-color: #A8392E; color: #FFFFFF; border-color: #A8392E; }
+QPushButton[role="event"][state="drop"]    { background-color: #8E2F26; color: #FFFFFF; border-color: #8E2F26; }
+
+
+/* === Toolbar icon buttons ============================================ */
+QToolButton,
+QPushButton[role="icon"] {
+    background-color: transparent;
+    border: none;
+    border-radius: 2px;
+    padding: 6px;
+    min-width: 32px;
+    min-height: 32px;
+}
+QToolButton:hover,
+QPushButton[role="icon"]:hover    { background-color: #F2EFE7; }
+QToolButton:checked,
+QPushButton[role="icon"]:checked  { background-color: #E8E3D6; color: #0F1E3D; }
+QToolButton:pressed,
+QPushButton[role="icon"]:pressed  { background-color: #D4CCBA; }
+
+
+/* === Status bar (persistent retention controlled in Python) ========== */
+QStatusBar {
+    background-color: #F2EFE7;
+    color: #070D1F;
+    border-top: 1px solid #E8E3D6;
+    font-family: "JetBrains Mono", "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+}
+QStatusBar[severity="success"] { border-left: 3px solid #1F6B47; background-color: #E0EFE5; }
+QStatusBar[severity="error"]   { border-left: 3px solid #8E2F26; background-color: #F2D6D2; }
+QStatusBar[severity="warn"]    { border-left: 3px solid #8A5A0F; background-color: #F7E9CC; }
+QStatusBar[severity="info"]    { border-left: 3px solid #0F1E3D; }
+
+
+/* === Header strip (toolbar host) ===================================== */
+#MysHeader {
+    background-color: #FFFFFF;
+    border-bottom: 1px solid #E8E3D6;
+}
+#MysHeader QLabel#brand {
+    color: #A8392E;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+
+/* === Dialog ========================================================== */
+/* v2 design: clean white card, warm border, square corners, generous
+   padding. Every QDialog in the app inherits this — no per-dialog
+   stylesheet needed. */
+QDialog {
+    background-color: #FFFFFF;
+    border: 1px solid #E8E3D6;
+    border-radius: 2px;
+}
+QDialog > QLabel,
+QDialog QLabel {
+    background-color: transparent;
+}
+QDialog QLabel[role="dialogTitle"] {
+    font-size: 18px;
+    font-weight: 700;
+    color: #070D1F;
+    padding-bottom: 4px;
+}
+QDialog QLabel[role="dialogSubtitle"] {
+    font-size: 13px;
+    color: #7A736A;
+    padding-bottom: 8px;
+}
+QDialog QLabel[role="section"] {
+    font-size: 12px;
+    font-weight: 700;
+    color: #070D1F;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding-top: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #E8E3D6;
+}
+QDialog QLabel[role="formLabel"] {
+    font-size: 10px;
+    font-weight: 700;
+    color: #7A736A;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+}
+
+/* QGroupBox is what 90% of legacy Artisan dialogs use to section their
+   content. Restyle title to match v2 — small uppercase dark navy on a
+   thin warm divider line — and remove the noisy default GroupBox frame. */
+QDialog QGroupBox,
+QGroupBox {
+    background-color: transparent;
+    border: none;
+    border-top: 1px solid #E8E3D6;
+    margin-top: 22px;
+    padding-top: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #070D1F;
+    letter-spacing: 0.6px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 4px 0 0;
+    background-color: #FFFFFF;
+    color: #070D1F;
+    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+
+/* Bottom button bar (QDialogButtonBox) — right-aligned secondary +
+   primary trio per the mockup. */
+QDialog QDialogButtonBox {
+    button-layout: 3;  /* MacLayout: cancel | apply | accept */
+    spacing: 8px;
+    padding-top: 16px;
+}
+
+
+/* === Inputs ========================================================== */
+QLineEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox,
+QPlainTextEdit,
+QTextEdit,
+QDateTimeEdit,
+QDateEdit,
+QTimeEdit {
+    background-color: #FFFFFF;
+    color: #070D1F;
+    border: 1px solid #D4CCBA;
+    border-radius: 2px;
+    padding: 6px 10px;
+    selection-background-color: #0F1E3D;
+    selection-color: #FFFFFF;
+}
+/* QComboBox: only ~4px extra padding-left so the displayed value isn't
+   right against the border. Don't touch padding-right — the drop-down
+   sub-control occupies that space and adding padding-right would push
+   the text out of view in narrow combos (e.g. the kg/g unit selector). */
+QComboBox {
+    padding-left: 8px;
+}
+QLineEdit[mono="true"],
+QSpinBox[mono="true"],
+QDoubleSpinBox[mono="true"] {
+    font-family: "JetBrains Mono", "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+QLineEdit:focus,
+QComboBox:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus,
+QPlainTextEdit:focus,
+QTextEdit:focus,
+QDateTimeEdit:focus {
+    border: 1px solid #0F1E3D;
+}
+QLineEdit:disabled,
+QComboBox:disabled,
+QSpinBox:disabled,
+QDoubleSpinBox:disabled {
+    background-color: #F2EFE7;
+    color: #A8A092;
+}
+
+
+/* === ComboBox dropdown =============================================== */
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+QComboBox QAbstractItemView {
+    background-color: #FFFFFF;
+    border: 1px solid #E8E3D6;
+    selection-background-color: #FAF8F4;
+    selection-color: #0F1E3D;
+    padding: 4px;
+    outline: 0;
+}
+/* Individual items inside the QComboBox popup: give them enough vertical
+   breathing room so short labels (kg, g, lb, oz) aren't cropped. */
+QComboBox QAbstractItemView::item {
+    padding: 6px 12px;
+    min-height: 22px;
+    color: #070D1F;
+    background-color: transparent;
+}
+QComboBox QAbstractItemView::item:selected {
+    background-color: #FAF8F4;
+    color: #0F1E3D;
+}
+QComboBox QAbstractItemView::item:hover {
+    background-color: #F2EFE7;
+    color: #0F1E3D;
+}
+
+
+/* === SpinBox / DoubleSpinBox up & down buttons ======================== */
+/* The default Qt up/down arrows render dark-on-dark when the field has a
+   tinted background (e.g. our coffee-marked fields, or the navy palette
+   override). Force a clean look — small warm tab on the right with navy
+   chevron arrows in vector form, always visible. */
+QSpinBox::up-button,
+QDoubleSpinBox::up-button,
+QDateTimeEdit::up-button,
+QDateEdit::up-button,
+QTimeEdit::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left: 1px solid #E8E3D6;
+    border-bottom: 1px solid #E8E3D6;
+    background-color: #FAF8F4;
+    border-top-right-radius: 2px;
+}
+QSpinBox::down-button,
+QDoubleSpinBox::down-button,
+QDateTimeEdit::down-button,
+QDateEdit::down-button,
+QTimeEdit::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 18px;
+    border-left: 1px solid #E8E3D6;
+    background-color: #FAF8F4;
+    border-bottom-right-radius: 2px;
+}
+QSpinBox::up-button:hover,
+QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover,
+QDoubleSpinBox::down-button:hover { background-color: #F2EFE7; }
+QSpinBox::up-button:pressed,
+QDoubleSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed,
+QDoubleSpinBox::down-button:pressed { background-color: #E8E3D6; }
+
+QSpinBox::up-arrow,
+QDoubleSpinBox::up-arrow,
+QDateTimeEdit::up-arrow,
+QDateEdit::up-arrow,
+QTimeEdit::up-arrow {
+    image: url("../icons/myspresso/chevron-up.svg");
+    width: 10px;
+    height: 10px;
+}
+QSpinBox::down-arrow,
+QDoubleSpinBox::down-arrow,
+QDateTimeEdit::down-arrow,
+QDateEdit::down-arrow,
+QTimeEdit::down-arrow {
+    image: url("../icons/myspresso/chevron-down.svg");
+    width: 10px;
+    height: 10px;
+}
+QSpinBox::up-arrow:disabled,
+QDoubleSpinBox::up-arrow:disabled,
+QSpinBox::down-arrow:disabled,
+QDoubleSpinBox::down-arrow:disabled { opacity: 0.3; }
+
+
+/* === Timer / hero labels ============================================= */
+QLabel[role="timer"] {
+    font-family: "JetBrains Mono", "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    font-size: 72px;
+    font-weight: 700;
+    color: #070D1F;
+    letter-spacing: -2px;
+}
+QLabel[role="temperature"] {
+    font-family: "JetBrains Mono", "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    font-size: 32px;
+    font-weight: 500;
+    color: #A8392E;
+}
+QLabel[role="title"] {
+    font-size: 18px;
+    font-weight: 600;
+    color: #070D1F;
+}
+QLabel[role="muted"] {
+    color: #7A736A;
+    font-size: 11px;
+}
+
+
+/* === Cloud connection badge ========================================== */
+/* Text colour stays dark navy in both states — the leading dot (set via
+   rich-text inline span in MySpressoHeader.set_connected) carries the
+   semantic green/red.  Background tints the badge subtly. */
+QLabel#cloudBadge[connected="true"] {
+    background-color: #E0EFE5;
+    color: #070D1F;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+}
+QLabel#cloudBadge[connected="false"] {
+    background-color: #F2D6D2;
+    color: #070D1F;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+}
+
+
+/* === Tabs ============================================================ */
+QTabBar::tab {
+    background: transparent;
+    color: #4E4A44;
+    padding: 10px 18px;
+    border: none;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+QTabBar::tab:selected {
+    color: #0F1E3D;
+    border-bottom: 2px solid #A8392E;
+}
+QTabBar::tab:hover:!selected {
+    color: #0F1E3D;
+}
+QTabWidget::pane {
+    border: 1px solid #E8E3D6;
+    top: -1px;
+}
+
+
+/* === GroupBox ======================================================== */
+QGroupBox {
+    border: 1px solid #E8E3D6;
+    border-radius: 2px;
+    margin-top: 12px;
+    padding-top: 16px;
+    font-weight: 600;
+    color: #070D1F;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 6px;
+    color: #4E4A44;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+
+
+/* === Checkbox / Radio ================================================ */
+QCheckBox, QRadioButton {
+    color: #070D1F;
+    spacing: 8px;
+}
+QCheckBox::indicator, QRadioButton::indicator {
+    width: 16px;
+    height: 16px;
+}
+QCheckBox::indicator:unchecked, QRadioButton::indicator:unchecked {
+    border: 1px solid #D4CCBA;
+    background-color: #FFFFFF;
+    border-radius: 2px;
+}
+QRadioButton::indicator:unchecked { border-radius: 8px; }
+QCheckBox::indicator:checked, QRadioButton::indicator:checked {
+    border: 1px solid #0F1E3D;
+    background-color: #0F1E3D;
+    border-radius: 2px;
+}
+QRadioButton::indicator:checked { border-radius: 8px; }
+
+
+/* === Slider ========================================================== */
+QSlider::groove:horizontal {
+    height: 4px;
+    background: #E8E3D6;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    width: 16px;
+    height: 16px;
+    margin: -6px 0;
+    border-radius: 8px;
+    background: #0F1E3D;
+}
+QSlider::sub-page:horizontal {
+    background: #A8392E;
+    border-radius: 2px;
+}
+
+
+/* === Tables / Trees / Lists ========================================== */
+QTableWidget, QTreeWidget, QListWidget, QTableView, QTreeView, QListView {
+    background-color: #FFFFFF;
+    alternate-background-color: #FAF8F4;
+    border: 1px solid #E8E3D6;
+    gridline-color: #E8E3D6;
+    selection-background-color: #E8ECF2;
+    selection-color: #0F1E3D;
+    outline: 0;
+}
+QHeaderView::section {
+    background-color: #F2EFE7;
+    color: #4E4A44;
+    border: none;
+    border-right: 1px solid #E8E3D6;
+    border-bottom: 1px solid #E8E3D6;
+    padding: 8px 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+
+
+/* === ScrollBar (subtle, warm) ======================================== */
+QScrollBar:vertical {
+    width: 10px;
+    background: transparent;
+}
+QScrollBar::handle:vertical {
+    background: #D4CCBA;
+    border-radius: 5px;
+    min-height: 30px;
+}
+QScrollBar::handle:vertical:hover { background: #A8A092; }
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar:horizontal {
+    height: 10px;
+    background: transparent;
+}
+QScrollBar::handle:horizontal {
+    background: #D4CCBA;
+    border-radius: 5px;
+    min-width: 30px;
+}
+QScrollBar::handle:horizontal:hover { background: #A8A092; }
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal { width: 0; }
+
+
+/* === Menus & ContextMenu ============================================= */
+QMenu {
+    background-color: #FFFFFF;
+    border: 1px solid #E8E3D6;
+    padding: 4px;
+}
+QMenu::item {
+    padding: 8px 24px;
+    color: #070D1F;
+}
+QMenu::item:selected {
+    background-color: #FAF8F4;
+    color: #0F1E3D;
+}
+QMenu::separator {
+    height: 1px;
+    background: #E8E3D6;
+    margin: 4px 8px;
+}
+
+
+/* === Tooltip ========================================================= */
+QToolTip {
+    background-color: #070D1F;
+    color: #FAF8F4;
+    border: none;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+
+/* === DARK MODE ======================================================= */
+
+[theme="dark"] QWidget {
+    background-color: #16181D;
+    color: #F0EDE5;
+}
+[theme="dark"] QDialog,
+[theme="dark"] QMainWindow {
+    background-color: #16181D;
+}
+[theme="dark"] #MysHeader {
+    background-color: #1E2128;
+    border-bottom: 1px solid #2E333C;
+}
+[theme="dark"] QStatusBar {
+    background-color: #0F1115;
+    color: #F0EDE5;
+    border-top: 1px solid #2E333C;
+}
+[theme="dark"] QDialog QPushButton {
+    background-color: #1E2128;
+    color: #F0EDE5;
+    border-color: #3E444F;
+}
+[theme="dark"] QDialog QPushButton:hover            { background-color: #262A33; }
+[theme="dark"] QDialog QPushButton:default          { background-color: #243B6B; border-color: #243B6B; }
+[theme="dark"] QDialog QPushButton:default:hover    { background-color: #172A52; }
+[theme="dark"] QPushButton[role="primary"]        { background-color: #243B6B; }
+[theme="dark"] QPushButton[role="primary"]:hover  { background-color: #172A52; }
+[theme="dark"] QPushButton[role="danger"]         { background-color: #C66459; }
+[theme="dark"] QPushButton[role="danger"]:hover   { background-color: #A8392E; }
+[theme="dark"] QPushButton[role="secondary"] {
+    background-color: #1E2128;
+    color: #F0EDE5;
+    border-color: #3E444F;
+}
+[theme="dark"] QPushButton[role="secondary"]:hover { background-color: #262A33; }
+[theme="dark"] QPushButton[role="event"] {
+    background-color: #1E2128;
+    color: #F0EDE5;
+    border-color: #3E444F;
+}
+[theme="dark"] QPushButton[role="event"]:hover    { background-color: #262A33; }
+[theme="dark"] QToolButton:hover,
+[theme="dark"] QPushButton[role="icon"]:hover     { background-color: #262A33; }
+[theme="dark"] QLineEdit,
+[theme="dark"] QComboBox,
+[theme="dark"] QSpinBox,
+[theme="dark"] QDoubleSpinBox,
+[theme="dark"] QPlainTextEdit,
+[theme="dark"] QTextEdit,
+[theme="dark"] QDateTimeEdit {
+    background-color: #1E2128;
+    color: #F0EDE5;
+    border-color: #3E444F;
+}
+[theme="dark"] QLineEdit:focus,
+[theme="dark"] QComboBox:focus,
+[theme="dark"] QSpinBox:focus,
+[theme="dark"] QDoubleSpinBox:focus { border-color: #7A8FB8; }
+[theme="dark"] QComboBox QAbstractItemView {
+    background-color: #1E2128;
+    border-color: #3E444F;
+    selection-background-color: #262A33;
+    selection-color: #F0EDE5;
+}
+[theme="dark"] QTabBar::tab           { color: #B4ADA0; }
+[theme="dark"] QTabBar::tab:selected  { color: #F0EDE5; border-bottom-color: #D78A82; }
+[theme="dark"] QTabWidget::pane       { border-color: #2E333C; }
+[theme="dark"] QGroupBox              { border-top-color: #2E333C; }
+[theme="dark"] QGroupBox::title       {
+    color: #F0EDE5;
+    background-color: #1E2128;
+}
+[theme="dark"] QDialog QLabel[role="dialogSubtitle"] { color: #B4ADA0; }
+[theme="dark"] QDialog QLabel[role="section"]        {
+    color: #F0EDE5;
+    border-bottom-color: #2E333C;
+}
+[theme="dark"] QDialog QLabel[role="formLabel"]      { color: #B4ADA0; }
+[theme="dark"] QCheckBox::indicator:unchecked,
+[theme="dark"] QRadioButton::indicator:unchecked {
+    border-color: #3E444F;
+    background-color: #1E2128;
+}
+[theme="dark"] QCheckBox::indicator:checked,
+[theme="dark"] QRadioButton::indicator:checked {
+    background-color: #243B6B;
+    border-color: #243B6B;
+}
+[theme="dark"] QSlider::groove:horizontal { background: #2E333C; }
+[theme="dark"] QSlider::handle:horizontal { background: #F0EDE5; }
+[theme="dark"] QSlider::sub-page:horizontal { background: #C66459; }
+[theme="dark"] QTableWidget,
+[theme="dark"] QTreeWidget,
+[theme="dark"] QListWidget {
+    background-color: #1E2128;
+    alternate-background-color: #16181D;
+    border-color: #2E333C;
+    gridline-color: #2E333C;
+    selection-background-color: #262A33;
+    selection-color: #F0EDE5;
+}
+[theme="dark"] QHeaderView::section {
+    background-color: #0F1115;
+    color: #B4ADA0;
+    border-right-color: #2E333C;
+    border-bottom-color: #2E333C;
+}
+[theme="dark"] QMenu {
+    background-color: #1E2128;
+    border-color: #2E333C;
+}
+[theme="dark"] QMenu::item:selected   { background-color: #262A33; color: #F0EDE5; }
+[theme="dark"] QMenu::separator       { background: #2E333C; }
+[theme="dark"] QScrollBar::handle:vertical,
+[theme="dark"] QScrollBar::handle:horizontal { background: #3E444F; }
+[theme="dark"] QScrollBar::handle:vertical:hover,
+[theme="dark"] QScrollBar::handle:horizontal:hover { background: #4E4A44; }
+[theme="dark"] QToolTip {
+    background-color: #F0EDE5;
+    color: #070D1F;
+}
+[theme="dark"] QLabel[role="timer"]   { color: #F0EDE5; }
+[theme="dark"] QLabel[role="temperature"] { color: #D78A82; }
+[theme="dark"] QLabel[role="muted"]   { color: #7E7A72; }
+[theme="dark"] QLabel#cloudBadge[connected="true"] {
+    background-color: #1F2D24;
+    color: #6FB78D;
+}
+[theme="dark"] QLabel#cloudBadge[connected="false"] {
+    background-color: #2D1E1B;
+    color: #D78A82;
+}

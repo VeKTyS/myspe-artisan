@@ -395,17 +395,20 @@ class tgraphcanvas(QObject):
         #default palette of colors
         self.locale_str:str = locale
         self.alpha:dict[str,float] = {'analysismask':0.4,'statsanalysisbkgnd':1.0,'legendbg':0.8}
-        self.palette:dict[str,str] = {'background':'#ffffff','grid':'#e5e5e5','ylabel':'#808080','xlabel':'#808080','title':'#0c6aa6',
-                        'title_focus':'#cc0f50', 'title_hidden':'#808080',
-                        'rect1':'#e5e5e5','rect2':'#b2b2b2','rect3':'#e5e5e5','rect4':'#bde0ee','rect5':'#d3d3d3',
-                        'et':'#cc0f50','bt':'#0a5c90','xt':'#404040','yt':'#404040','deltaet':'#cc0f50',
-                        'deltabt':'#0a5c90','markers':'#000000','text':'#000000','watermarks':'#ffff00','timeguide':'#0a5c90',
-                        'canvas':'#f8f8f8','legendbg':'#ffffff','legendborder':'#a9a9a9',
-                        'specialeventbox':'#ff5871','specialeventtext':'#ffffff',
-                        'bgeventmarker':'#7f7f7f','bgeventtext':'#000000',
-                        'mettext':'#ffffff','metbox':'#cc0f50',
-                        'aucguide':'#0c6aa6','messages':'#000000','aucarea':'#767676',
-                        'analysismask':'#bababa','statsanalysisbkgnd':'#ffffff'}
+        # MySpresso fork: chart palette aligned to design tokens
+        # (CHART_TE / CHART_BT / CHART_DELTA from design_tokens.py, plus warm
+        # neutrals for the canvas chrome). See src/artisanlib/design_tokens.py.
+        self.palette:dict[str,str] = {'background':'#FFFFFF','grid':'#E8E3D6','ylabel':'#7A736A','xlabel':'#7A736A','title':'#0F1E3D',
+                        'title_focus':'#A8392E', 'title_hidden':'#A8A092',
+                        'rect1':'#E8E3D6','rect2':'#D4CCBA','rect3':'#F2EFE7','rect4':'#D0D8E4','rect5':'#E8E3D6',
+                        'et':'#A8392E','bt':'#0F1E3D','xt':'#4E4A44','yt':'#4E4A44','deltaet':'#A8392E',
+                        'deltabt':'#0F1E3D','markers':'#070D1F','text':'#070D1F','watermarks':'#C7873A','timeguide':'#0F1E3D',
+                        'canvas':'#FAF8F4','legendbg':'#FFFFFF','legendborder':'#D4CCBA',
+                        'specialeventbox':'#A8392E','specialeventtext':'#FFFFFF',
+                        'bgeventmarker':'#7A736A','bgeventtext':'#070D1F',
+                        'mettext':'#FFFFFF','metbox':'#A8392E',
+                        'aucguide':'#0F1E3D','messages':'#070D1F','aucarea':'#A8A092',
+                        'analysismask':'#A8A092','statsanalysisbkgnd':'#FFFFFF'}
         self.palette1 = self.palette.copy()
         self.EvalueColor_default:Final[list[str]] = ['#43a7cf','#49b160','#800080','#ad0427']
         self.EvalueTextColor_default:Final[list[str]] = ['#ffffff','#ffffff','#ffffff','#ffffff']
@@ -9157,9 +9160,15 @@ class tgraphcanvas(QObject):
 
         title = self.__dijkstra_to_ascii(title)
 
-        self.title_text = self.aw.arabicReshape(title.strip())
+        # MySpresso fork: the roast title is already displayed in the hero
+        # panel above the chart (myspresso_hero.py). Force BOTH
+        # self.title_text AND the ax title artist to empty so the resize
+        # handler (canvas.py ~3075) doesn't restore the title later.
+        # We keep title_artist alive (matplotlib needs the Text artist) but
+        # with empty content.
+        self.title_text = ''
         if self.ax is not None:
-            self.title_artist = self.ax.set_title(self.title_text, color=self.palette['title'], loc='left',
+            self.title_artist = self.ax.set_title('', color=self.palette['title'], loc='left',
                         fontsize='xx-large',
                         horizontalalignment='left',verticalalignment='top',x=0)
         if self.title_artist is not None:
@@ -9587,9 +9596,13 @@ class tgraphcanvas(QObject):
                                 titleB = self.titleB
                             else:
                                 titleB = f'{self.roastbatchprefixB}{self.roastbatchnrB} {self.titleB}'
+                        # MySpresso fork: the brand identity is shown in the
+                        # top header strip (MySpressoHeader) — suppress the
+                        # legacy in-chart sponsor annotation to avoid noise.
+                        # The legacy code path is kept for upstream parity but
+                        # the sponsor string is left empty.
                         elif __release_sponsor_domain__ != '':
-                            sponsor = QApplication.translate('About','sponsored by {}').format(__release_sponsor_domain__)
-                            titleB = f'\n{sponsor}'
+                            titleB = ''
 
                     # extra event names with substitution of event names applied
                     extraname1_subst = self.extraname1[:]
