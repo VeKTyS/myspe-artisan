@@ -69,7 +69,8 @@ def is_synced() -> bool:
 
 def start(app_window:'ApplicationWindow') -> None:
     config.app_window = app_window
-    QTimer.singleShot(2, connect)
+    if config.api_base_url:
+        QTimer.singleShot(2, connect)
 
 
 # toggles between connected and disconnected modes. If connected and
@@ -134,6 +135,15 @@ def connect(clear_on_failure: bool =False, interactive: bool = True) -> None:
             'connect(%s,%s)', clear_on_failure, interactive
         )
         aw = config.app_window
+        if not config.api_base_url:
+            _log.warning('connect: no API URL configured — open MySpresso Cloud Settings')
+            if aw is not None and interactive:
+                aw.sendmessageSignal.emit(
+                    QApplication.translate('Plus', 'MySpresso: configure the API URL in Cloud Settings first'),
+                    True,
+                    None,
+                )
+            return
         try:
             connect_semaphore.acquire(1)
             keychain_success:bool = False # True once credentials could be successfully store in keychain
@@ -409,7 +419,7 @@ def disconnect(
 
 
 def reconnected() -> None:
-    if not is_connected():
+    if not is_connected() and is_on():
         try:
             connect_semaphore.acquire(1)
             config.connected = True
