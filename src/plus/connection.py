@@ -389,6 +389,7 @@ def getHeaders(
                 headers['Accept-Language'] = locale
         except Exception as e:  # pylint: disable=broad-except
             _log.exception(e)
+        headers['apikey'] = config.SUPABASE_ANON_KEY
         if authorized and config.auth_enabled:
             token = getToken()
             if token is not None:
