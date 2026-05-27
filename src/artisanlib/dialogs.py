@@ -68,10 +68,26 @@ class ArtisanDialog(QDialog):
             okButton.setDefault(True)
             okButton.setAutoDefault(True)
             okButton.setFocusPolicy(Qt.FocusPolicy.StrongFocus) # to add to tab focus switch
+            # MySpresso fork: tag OK as primary so it picks up the navy
+            # primary QSS rule across every Artisan dialog inheriting this.
+            # Force re-polish so the stylesheet re-evaluates against the new
+            # property value (Qt does not always do this automatically when
+            # the widget is constructed before the property is set).
+            okButton.setProperty('role', 'primary')
+            _ok_style = okButton.style()
+            if _ok_style is not None:
+                _ok_style.unpolish(okButton)
+                _ok_style.polish(okButton)
         cancelButton: QPushButton|None = self.dialogbuttons.button(QDialogButtonBox.StandardButton.Cancel)
         if cancelButton is not None:
             cancelButton.setDefault(False)
             cancelButton.setAutoDefault(False)
+            # MySpresso fork: tag Cancel as secondary (outlined warm).
+            cancelButton.setProperty('role', 'secondary')
+            _cancel_style = cancelButton.style()
+            if _cancel_style is not None:
+                _cancel_style.unpolish(cancelButton)
+                _cancel_style.polish(cancelButton)
             # add additional CMD-. shortcut to close the dialog
             cancelButton.setShortcut(QKeySequence('Ctrl+.'))
             # add additional CMD-W shortcut to close this dialog (ESC on Mac OS X)

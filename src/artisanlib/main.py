@@ -608,6 +608,15 @@ app.setOrganizationDomain(application_organization_domain)              #needed 
 if sys.platform.startswith('linux'):
     app.setDesktopFileName(application_desktop_file_name)
 
+# MySpresso fork: apply the design-system QSS now that QApplication name
+# + organization are set. Stylesheet is bundled in artisanlib/styles/.
+# Set MYSPRESSO_STYLE_DISABLED=true to fall back to the upstream Artisan look.
+try:
+    from artisanlib.styles import apply_myspresso_stylesheet
+    apply_myspresso_stylesheet(app)
+except Exception as _e:  # pylint: disable=broad-except
+    _log.exception(_e)
+
 # replace revision string with git hash when running from source
 if not appFrozen() and __revision__ in {'', '0'}:
     try:
@@ -1045,6 +1054,25 @@ class VMToolbar(NavigationToolbar): # pylint: disable=abstract-method
 
     @override
     def _icon(self, name:str) -> QIcon:
+        # MySpresso fork: look in our line-icon set first (home/back/forward/
+        # pan/zoom etc.). Falls back to upstream Artisan / matplotlib icons
+        # when the MySpresso variant doesn't exist (save, subplots, …).
+        myspresso_map = {
+            'home.png': 'home.svg', 'home.svg': 'home.svg',
+            'back.png': 'back.svg', 'back.svg': 'back.svg',
+            'forward.png': 'forward.svg', 'forward.svg': 'forward.svg',
+            'move.png': 'pan.svg', 'move.svg': 'pan.svg',
+            'zoom_to_rect.png': 'zoom.svg', 'zoom_to_rect.svg': 'zoom.svg',
+        }
+        if name in myspresso_map and not name.startswith('plus'):
+            ms_dir = os.path.join(getResourcePath(), '..', 'icons', 'myspresso')
+            ms_path = os.path.normpath(os.path.join(ms_dir, myspresso_map[name]))
+            if os.path.isfile(ms_path):
+                ms_pm = QPixmap(ms_path)
+                if not ms_pm.isNull():
+                    if hasattr(ms_pm, 'setDevicePixelRatio'):
+                        ms_pm.setDevicePixelRatio(self.devicePixelRatioF() or 1)
+                    return QIcon(ms_pm)
         if name.startswith('plus') or self.white_icons:
             basedir = os.path.join(getResourcePath(),'Icons')
         else:
@@ -1534,7 +1562,8 @@ class ApplicationWindow(QMainWindow):
         'main_menu_actions_with_shortcuts', 'ui_mode', 'UIModeMenu',  'productionModeAction', 'defaultModeAction', 'expertModeAction', 'calculatorAction',
         'helpAboutAction', 'checkUpdateAction', 'errorAction', 'messageAction', 'serialAction', 'platformAction', 'aboutQtAction',
         'helpDocumentationAction', 'KshortCAction', 'profile_data_type_adapter', 'official_build',
-        'myspressoSettingsAction', 'pushRoastToMyspressoAction' ]
+        'myspressoSettingsAction', 'pushRoastToMyspressoAction',
+        'myspresso_header', 'myspresso_hero', 'myspresso_eventlog', 'myspresso_stats' ]
 
     nLCDS: Final[int] = 10 # maximum number of LCDs and extra devices (2x10 => 20 in total!)
 
@@ -1876,26 +1905,29 @@ class ApplicationWindow(QMainWindow):
         self.recentRoasts:list[RecentRoast] = []
         self.maxRecentRoasts = 40 # the maximum number of recent roasts held
 
+        # MySpresso fork: LCD palette aligned to design tokens
+        # (CHART_TE for ET, CHART_BT for BT, warm tones for backgrounds).
+        # See src/artisanlib/design_tokens.py for the colour reference.
         #lcd1 = time, lcd2 = met, lcd3 = bt, lcd4 = roc et, lcd5 = roc bt, lcd6 = sv (extra devices lcd same as sv settings)
         self.lcdpaletteB:dict[str,str] = {
-            'timer':'#F8F8F8',
-            'et':'#cc0f50',
-            'bt':'#0A5C90',
-            'deltaet':'#EBEBEB',
-            'deltabt':'#EBEBEB',
-            'sv':'#F8F8F8',
-            'rstimer':'#F8F8F8',
-            'slowcoolingtimer':'#F8F8F8',
+            'timer':'#FAF8F4',           # warm.100 — light warm canvas
+            'et':'#A8392E',              # red.600 — bean/env temp
+            'bt':'#0F1E3D',              # navy.700 — drum temp
+            'deltaet':'#F2EFE7',         # warm.200
+            'deltabt':'#F2EFE7',         # warm.200
+            'sv':'#FAF8F4',              # warm.100
+            'rstimer':'#FAF8F4',
+            'slowcoolingtimer':'#FAF8F4',
             }
         self.lcdpaletteF:dict[str,str] = {
-            'timer':'#262626',
-            'et':'#ffffff',
-            'bt':'#ffffff',
-            'deltaet':'#cc0f50',
-            'deltabt':'#0A5C90',
-            'sv':'#4C4C4C',
-            'rstimer':'#187AB3',
-            'slowcoolingtimer':'#CC0D50',
+            'timer':'#070D1F',           # navy.900 — main display
+            'et':'#FFFFFF',
+            'bt':'#FFFFFF',
+            'deltaet':'#A8392E',         # red.600 (delta ET rate)
+            'deltabt':'#0F1E3D',         # navy.700 (delta BT rate)
+            'sv':'#4E4A44',              # warm.700
+            'rstimer':'#0F1E3D',
+            'slowcoolingtimer':'#A8392E',
             }
 
         #user defined event buttons
@@ -2884,6 +2916,13 @@ class ApplicationWindow(QMainWindow):
         self.messagelabel.setFont(f)
 
         self.messagelabel.setIndent(6)
+        # MySpresso fork: the top-of-canvas status label duplicates what the
+        # bottom MySpressoEventLog strip already shows (it mirrors the same
+        # messagehist). Hide it to avoid the duplicated read-out. We keep the
+        # widget present so anything that still calls setText / setStyleSheet
+        # on it continues to work — it just consumes no visible space.
+        self.messagelabel.setVisible(False)
+        self.messagelabel.setMaximumHeight(0)
         # set a few broad style parameters
         if platform.system() == 'Linux':
             self.button_font_size_pt = 11
@@ -3029,197 +3068,111 @@ class ApplicationWindow(QMainWindow):
             """,
         }
 
+        # MySpresso fork: button styles rebuilt against the design-tokens
+        # palette. Semantic mapping preserves Artisan's original meaning of
+        # each state (idle vs. live, secondary vs. destructive) but in the
+        # navy/red/warm system instead of the legacy blue/pink/orange.
+        # See src/artisanlib/design_tokens.py for the source of truth.
+        #   IDLE  (OFF, STOP, PID)         -> navy.500/700  (steady, ready)
+        #   LIVE  (ON, START, PIDactive)   -> red.600       (alert, recording)
+        #   RESET                          -> warm outlined (secondary)
+        #   SV +/-                         -> warm with red/navy tint
+        from artisanlib import design_tokens as _ms  # noqa: PLC0415
+
+        def _btn_style(
+            bg: str, bg_hover: str, bg_pressed: str,
+            *, fg: str = '#FFFFFF', small: bool = False,
+        ) -> str:
+            font_size = self.button_font_size_small if small else self.button_font_size
+            min_w = (
+                f'{self.standard_button_min_width_px}px' if small
+                else self.main_button_min_width_str
+            )
+            return (
+                'QPushButton {'
+                f'min-width: {min_w};'
+                f'{border_modern}'
+                f'font-size: {font_size};'
+                'font-weight: 600;'
+                f'color: {fg};'
+                f'background-color: {bg};'
+                '}'
+                'QPushButton:!enabled {'
+                f'color: {_ms.WARM_500};'
+                f'background-color: {_ms.WARM_200};'
+                '}'
+                'QPushButton:pressed {'
+                f'color: {fg};'
+                f'background-color: {bg_pressed};'
+                '}'
+                'QPushButton:hover:!pressed {'
+                f'color: {fg};'
+                f'background-color: {bg_hover};'
+                '}'
+            )
+
+        # Outlined-warm secondary button — used for RESET and idle ON button.
+        # Matches the v2 mockup pill style (warm card, navy text, thin border).
+        _outlined_warm = (
+            'QPushButton {'
+            f'min-width: {self.main_button_min_width_str};'
+            f'{border_modern}'
+            f'font-size: {self.button_font_size};'
+            'font-weight: 600;'
+            f'color: {_ms.NAVY_700};'
+            f'background-color: {_ms.WARM_200};'
+            f'border: 1px solid {_ms.WARM_400};'
+            '}'
+            'QPushButton:!enabled {'
+            f'color: {_ms.WARM_500};'
+            f'background-color: {_ms.WARM_100};'
+            '}'
+            'QPushButton:pressed {'
+            f'color: {_ms.NAVY_900};'
+            f'background-color: {_ms.WARM_300};'
+            '}'
+            'QPushButton:hover:!pressed {'
+            f'color: {_ms.NAVY_900};'
+            f'background-color: {_ms.WARM_300};'
+            '}'
+        )
+
         self.pushbuttonstyles: dict[str, str] = {
-            'RESET':     """
-                QPushButton {
-                    min-width: """ + self.main_button_min_width_str + """;
-                    """ + border_modern + """
-                    font-size: """ + self.button_font_size + """;
-                    font-weight: bold;
-                    color: white;
-                    background-color: #4c97c3;
-                }
-                QPushButton:!enabled {
-                    color: darkgrey;
-                    background-color: lightgrey;
-                }
-                QPushButton:pressed {
-                    color: #EEEEEE;
-                    background-color: #1985ba;
-                }
-                QPushButton:hover:!pressed {
-                    color: white;
-                    background-color: #43a7cf;
-                }
-            """,
-            'OFF':    """
-                QPushButton {
-                    min-width: """ + self.main_button_min_width_str + """;
-                    """ + border_modern + """
-                    font-size: """ + self.button_font_size + """;
-                    font-weight: bold;
-                    color: white;
-                    background-color: #3979ae;
-                }
-                QPushButton:!enabled {
-                    color: darkgrey;
-                    background-color: #E0E0E0;
-                }
-                QPushButton:pressed {
-                    color: #EEEEEE;
-                    background-color: #116D98;
-                }
-                QPushButton:hover:!pressed {
-                    color: white;
-                    background-color: #1985ba;
-                }
-            """,
-            'ON':    """
-                QPushButton {
-                    min-width: """ + self.main_button_min_width_str + """;
-                    """ + border_modern + """
-                    font-size: """ + self.button_font_size + """;
-                    font-weight: bold;
-                    color: white;
-                    background-color: #cc0f50;
-                }
-                QPushButton:!enabled {
-                    color: darkgrey;
-                    background-color: #E0E0E0;
-                }
-                QPushButton:pressed {
-                    color: #EEEEEE;
-                    background-color: #c70d49;
-                }
-                QPushButton:hover:!pressed {
-                    color: white;
-                    background-color: #d4336a;
-                }
-            """,
-            'STOP':     """
-                QPushButton {
-                    min-width: """ + self.main_button_min_width_str + """;
-                    """ + border_modern + """
-                    font-size: """ + self.button_font_size + """;
-                    font-weight: bold;
-                    color: white;
-                    background-color: #3979ae;
-                }
-                QPushButton:!enabled {
-                    color: darkgrey;
-                    background-color: #E0E0E0;
-                }
-                QPushButton:pressed {
-                    color: #EEEEEE;
-                    background-color: #116999;
-                }
-                QPushButton:hover:!pressed {
-                    color: white;
-                    background-color: #1985ba;
-                }
-            """,
-            'START':    """
-                QPushButton {
-                    min-width: """ + self.main_button_min_width_str + """;
-                    """ + border_modern + """
-                    font-size: """ + self.button_font_size + """;
-                    font-weight: bold;
-                    color: yellow;
-                    background-color: #ff3d00;
-                }
-                QPushButton:!enabled {
-                    color: darkgrey;
-                    background-color: #E0E0E0;
-                }
-                QPushButton:pressed {
-                    color: #EEEEEE;
-                    background-color: #116999;
-                }
-                QPushButton:hover:!pressed {
-                    color: white;
-                    background-color: red;
-                }
-            """,
-            'PID':     """
-                QPushButton {
-                    min-width: """ + self.main_button_min_width_str + """;
-                    """ + border_modern + """
-                    font-size: """ + self.button_font_size + """;
-                    font-weight: bold;
-                    color: white;
-                    background-color: #4c97c3;
-                }
-                QPushButton:!enabled {
-                    color: darkgrey;
-                    background-color: lightgrey;
-                }
-                QPushButton:pressed {
-                    color: #EEEEEE;
-                    background-color: #1985ba;
-                }
-                QPushButton:hover:!pressed {
-                    color: white;
-                    background-color: #43a7cf;
-                }
-            """,
-            'PIDactive':     """
-                QPushButton {
-                    min-width: """ + self.main_button_min_width_str + """;
-                    """ + border_modern + """
-                    font-size: """ + self.button_font_size + """;
-                    font-weight: bold;
-                    color: white;
-                    background-color: #cc0f50;
-                }
-                QPushButton:!enabled {
-                    color: darkgrey;
-                    background-color: lightgrey;
-                }
-                QPushButton:pressed {
-                    color: #EEEEEE;
-                    background-color: #c70d49;
-                }
-                QPushButton:hover:!pressed {
-                    color: white;
-                    background-color: #d4336a;
-                }
-            """,
-            'SV +':     """
-                QPushButton {
-                    min-width: """ + str(self.standard_button_min_width_px) + """px;
-                    """ + border_modern + """
-                    font-size: """ + self.button_font_size_small + """;
-                    font-weight: bold;
-                    color: white;
-                    background-color:""" + createGradient('#db5785') + """ ;
-                }
-                QPushButton:pressed {
-                    color: #EEEEEE;
-                    background-color:""" + createGradient('#d4336a') + """ ;
-                }
-                QPushButton:hover:!pressed {
-                    color: white;
-                    background-color:""" + createGradient('#e480a2') + """ ;
-                                     }
-            """,
-            'SV -':     """
-                QPushButton {
-                    min-width: """ + str(self.standard_button_min_width_px) + """px;
-                    """ + border_modern + """
-                    font-size: """ + self.button_font_size_small + """;
-                    font-weight: bold;
-                    color: white;
-                    background-color:""" + createGradient('#64b7d8') + """ ;
-                }
-                QPushButton:pressed {
-                    color: #EEEEEE;
-                    background-color:""" + createGradient('#43a7cf') + """ ;
-                }
-                QPushButton:hover:!pressed {
-                    color: white;
-                    background-color:""" + createGradient('#85cae1') + """ ;
-                }
-            """
+            # RESET: secondary outlined — low-emphasis "go back" action
+            'RESET': _outlined_warm,
+            # OFF: monitor idle — outlined warm (matches RESET so the header
+            # row reads as a coherent secondary trio: RESET · ON · DÉBUT)
+            'OFF': _outlined_warm,
+            # ON: monitor live — red brick, high attention
+            'ON': _btn_style(
+                bg=_ms.RED_600, bg_hover=_ms.RED_500, bg_pressed=_ms.RED_700,
+            ),
+            # STOP: recording idle — DÉBUT, the primary call-to-action
+            # (filled navy) — the one button that visually leads the row
+            'STOP': _btn_style(
+                bg=_ms.NAVY_700, bg_hover=_ms.NAVY_600, bg_pressed=_ms.NAVY_800,
+            ),
+            # START: recording about to start — strong red signal
+            'START': _btn_style(
+                bg=_ms.RED_600, bg_hover=_ms.RED_500, bg_pressed=_ms.RED_700,
+            ),
+            # PID: control inactive — navy
+            'PID': _btn_style(
+                bg=_ms.NAVY_500, bg_hover=_ms.NAVY_600, bg_pressed=_ms.NAVY_700,
+            ),
+            # PIDactive: control engaged — red
+            'PIDactive': _btn_style(
+                bg=_ms.RED_600, bg_hover=_ms.RED_500, bg_pressed=_ms.RED_700,
+            ),
+            # SV +/-: small increment buttons, lighter tints
+            'SV +': _btn_style(
+                bg=_ms.RED_500, bg_hover=_ms.RED_400, bg_pressed=_ms.RED_600,
+                small=True,
+            ),
+            'SV -': _btn_style(
+                bg=_ms.NAVY_400, bg_hover=_ms.NAVY_300, bg_pressed=_ms.NAVY_500,
+                small=True,
+            ),
             }
         # we use this high to dynamically adjust the button size to different font sizes (important for high-dpi displays on Windows)
         self.standard_button_tiny_height:int
@@ -3295,12 +3248,14 @@ class ApplicationWindow(QMainWindow):
         self.buttonRESET.clicked.connect(self.qmc.resetButtonAction)
 
         #create CHARGE button
-        self.buttonCHARGE: AnimatedMajorEventPushButton = AnimatedMajorEventPushButton(QApplication.translate('Button', 'CHARGE'))
+        # MySpresso fork: CHARGE = primary navy. DROP = danger red.
+        from artisanlib import design_tokens as _ms_dt
+        self.buttonCHARGE: AnimatedMajorEventPushButton = AnimatedMajorEventPushButton(QApplication.translate('Button', 'CHARGE'), background_color=_ms_dt.NAVY_700)
         self.buttonCHARGE.setToolTip(QApplication.translate('Tooltip', 'Charge'))
         self.buttonCHARGE.clicked.connect(self.qmc.markCharge)
 
         #create DROP button
-        self.buttonDROP: MajorEventPushButton = MajorEventPushButton(QApplication.translate('Button', 'DROP'))
+        self.buttonDROP: MajorEventPushButton = MajorEventPushButton(QApplication.translate('Button', 'DROP'), background_color=_ms_dt.RED_600)
         self.buttonDROP.setToolTip(QApplication.translate('Tooltip', 'Drop'))
         self.buttonDROP.clicked.connect(self.qmc.markDrop)
 
@@ -3388,6 +3343,32 @@ class ApplicationWindow(QMainWindow):
         self.buttonCOOL.setToolTip(QApplication.translate('Tooltip', 'Cool End'))
         self.buttonCOOL.clicked.connect(self.qmc.markCoolEnd)
 
+        # MySpresso fork: attach line-icon icons (from the Claude Design
+        # handoff, src/icons/myspresso/) to the event button row so the
+        # CHARGE/DROP/1Cs/1Ce/2Cs/2Ce/DRY/COOL row matches the v2 mockup.
+        try:
+            from PyQt6.QtCore import QSize as _QSize
+            from PyQt6.QtGui import QIcon as _QIcon
+            _icon_dir = os.path.normpath(os.path.join(
+                getResourcePath(), '..', 'icons', 'myspresso',
+            ))
+            _icon_size = _QSize(16, 16)
+            def _attach(btn, fname):  # noqa: ANN001
+                p = os.path.join(_icon_dir, fname)
+                if os.path.isfile(p):
+                    btn.setIcon(_QIcon(p))
+                    btn.setIconSize(_icon_size)
+            _attach(self.buttonCHARGE, 'charge.svg')
+            _attach(self.buttonDROP, 'drop.svg')
+            _attach(self.buttonDRY, 'crack.svg')
+            _attach(self.buttonFCs, 'crack.svg')
+            _attach(self.buttonFCe, 'crack.svg')
+            _attach(self.buttonSCs, 'crack.svg')
+            _attach(self.buttonSCe, 'crack.svg')
+            _attach(self.buttonCOOL, 'cool.svg')
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+
         #connect PID sv easy buttons
         self.buttonSVp5.clicked.connect(self.adjustPIDsv5)
         self.buttonSVp10.clicked.connect(self.adjustPIDsv10)
@@ -3399,6 +3380,12 @@ class ApplicationWindow(QMainWindow):
         # NavigationToolbar VMToolbar
         self.ntb: VMToolbar = VMToolbar(self.qmc.canvas, self.main_widget)
         #self.ntb.setMinimumHeight(50)
+
+        # MySpresso fork: apply the locLabel hide + set_message forwarding +
+        # per-action styling. Factored into _myspresso_setup_navtoolbar so it
+        # can be re-applied when Artisan recreates self.ntb on canvas-colour
+        # changes (line ~6800).
+        self._myspresso_setup_navtoolbar()
 
         #create LCD displays
         #RIGHT COLUMN
@@ -3729,6 +3716,12 @@ class ApplicationWindow(QMainWindow):
         # set the central widget of MainWindow to main_widget
         self.setCentralWidget(self.main_widget)
 
+        # MySpresso fork: wiring of the MySpresso widgets (header badges +
+        # button re-parenting, hero panel polling, event log polling) is
+        # deferred to right after level1layout is fully populated so that
+        # re-parenting RESET/ON/DÉBUT into the header is not undone by a
+        # later addWidget call.
+
         #list of functions to choose from (using left-right keyboard arrow)
         #   sidecond: len(self.keyboardmove) = len(self.keyboardButtonList) # for each self.keyboardmoveindex we have a keyboardmove function
         self.keyboardmove:list[Callable[..., None]] = [self.qmc.markCharge,self.qmc.markDryEnd,self.qmc.mark1Cstart,self.qmc.mark1Cend,
@@ -3975,6 +3968,10 @@ class ApplicationWindow(QMainWindow):
         self.level1layout.addWidget(self.lcd1)
         self.level1layout.setSpacing(0)
         self.level1layout.setContentsMargins(0,7,7,12) # left, top, right, bottom
+
+        # NOTE: MySpresso wiring (header / hero / eventlog / stats) was
+        # previously here but had to be deferred to AFTER the widgets are
+        # actually constructed (further down in __init__). See below.
 
         #level 3
         level3layout.addLayout(pidbuttonLayout,0)
@@ -4250,11 +4247,70 @@ class ApplicationWindow(QMainWindow):
         self.midlayout.setSpacing(0)
         self.midlayout.setContentsMargins(0,0,0,0)
 
+        # MySpresso fork: top header strip + hero panel. Both additive —
+        # do not touch level1frame / midlayout below.
+        try:
+            from artisanlib.myspresso_header import MySpressoHeader
+            self.myspresso_header: MySpressoHeader = MySpressoHeader(self.main_widget)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+            self.myspresso_header = None  # type: ignore[assignment]
+        try:
+            from artisanlib.myspresso_hero import MySpressoHeroPanel
+            self.myspresso_hero: MySpressoHeroPanel = MySpressoHeroPanel(self.main_widget)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+            self.myspresso_hero = None  # type: ignore[assignment]
+        try:
+            from artisanlib.myspresso_eventlog import MySpressoEventLog
+            self.myspresso_eventlog: MySpressoEventLog = MySpressoEventLog(self.main_widget)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+            self.myspresso_eventlog = None  # type: ignore[assignment]
+        try:
+            from artisanlib.myspresso_stats import MySpressoStatsStrip
+            self.myspresso_stats: MySpressoStatsStrip = MySpressoStatsStrip(self.main_widget)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+            self.myspresso_stats = None  # type: ignore[assignment]
+
         mainlayout:QVBoxLayout = QVBoxLayout(self.main_widget)
+        if self.myspresso_header is not None:
+            mainlayout.addWidget(self.myspresso_header)
+        if self.myspresso_hero is not None:
+            mainlayout.addWidget(self.myspresso_hero)
         mainlayout.addWidget(self.level1frame)
         mainlayout.addLayout(self.midlayout)
+        if self.myspresso_stats is not None:
+            mainlayout.addWidget(self.myspresso_stats)
+        if self.myspresso_eventlog is not None:
+            mainlayout.addWidget(self.myspresso_eventlog)
         mainlayout.setContentsMargins(0,0,0,0)
         mainlayout.setSpacing(0)
+
+        # MySpresso fork: wire AFTER both the action buttons exist in
+        # level1layout AND the MySpresso widgets have been constructed.
+        # This is the earliest point in __init__ where both invariants hold.
+        try:
+            if self.myspresso_header is not None:
+                self.myspresso_header.wire(self)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+        try:
+            if self.myspresso_hero is not None:
+                self.myspresso_hero.wire(self)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+        try:
+            if self.myspresso_eventlog is not None:
+                self.myspresso_eventlog.wire(self)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+        try:
+            if self.myspresso_stats is not None:
+                self.myspresso_stats.wire(self)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
 
         self.displayonlymenus() # enable/disable menu items as needed
 
@@ -5521,6 +5577,47 @@ class ApplicationWindow(QMainWindow):
         else: # we reset the tare value
             self.channel_tare_values[n] = 0
 
+# MySpresso fork: helper to apply our locLabel hide / set_message forward /
+# per-action styling to the matplotlib navtoolbar. Called once at startup
+# AND again whenever Artisan recreates self.ntb (canvas-colour change),
+# otherwise the new toolbar instance ships with a visible locLabel that
+# leaks "2:11 / 247.8°F" cursor coords back into the header strip.
+    def _myspresso_setup_navtoolbar(self) -> None:
+        try:
+            _loc = getattr(self.ntb, 'locLabel', None)
+            if _loc is not None:
+                _loc.hide()
+                _loc.setMaximumWidth(0)
+                _loc.setMaximumHeight(0)
+            _orig_set_message = self.ntb.set_message
+            def _myspresso_set_message(s: str) -> None:
+                _orig_set_message(s)
+                hero = getattr(self, 'myspresso_hero', None)
+                if hero is not None:
+                    try:
+                        hero.update_cursor(s)
+                    except Exception as _ex:  # pylint: disable=broad-except
+                        _log.exception(_ex)
+            self.ntb.set_message = _myspresso_set_message  # type: ignore[method-assign]
+            for _a in self.ntb.actions():
+                _w = self.ntb.widgetForAction(_a)
+                if _w is None:
+                    continue
+                _w.setStyleSheet(
+                    'QToolButton {'
+                    ' border: 1px solid transparent; margin: 2px; padding: 2px;'
+                    ' background-color: transparent; border-radius: 3px;'
+                    '}'
+                    'QToolButton:hover {'
+                    ' border: 1px solid #D9D2C5; background-color: #F2EFE7;'
+                    '}'
+                    'QToolButton:checked {'
+                    ' border: 1px solid #D9D2C5; background-color: #E8E3D6;'
+                    '}'
+                )
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+
 #PLUS
     @pyqtSlot()
     def updatePlusStatusSlot(self) -> None:
@@ -5603,6 +5700,19 @@ class ApplicationWindow(QMainWindow):
             _, _, exc_tb = sys.exc_info()
             self.qmc.adderror((QApplication.translate('Error Message', 'Exception:') + ' updatePlusStatus(): {0}').format(str(e)),getattr(exc_tb, 'tb_lineno', '?'))
 
+        # MySpresso fork: keep the brand-header cloud badge in sync with the
+        # plus connection state on every status change (login, logout, sync
+        # transitions). plus_account is None when logged out.
+        try:
+            _msh = getattr(self, 'myspresso_header', None)
+            if _msh is not None:
+                _connected = (
+                    self.plus_account is not None
+                    and plus.controller.is_connected()
+                )
+                _msh.set_connected(bool(_connected))
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
 
 
     # turns channel off after millis
@@ -6711,6 +6821,9 @@ class ApplicationWindow(QMainWindow):
 #            self.ntb.hide() # seems not to be necessary anymore with the removeToolBar() above
             self.ntb.destroy()
             self.ntb = VMToolbar(self.qmc.canvas, self.main_widget, whitep)
+            # MySpresso fork: re-apply our customisations to the new instance
+            # (locLabel hide + set_message forwarding + per-action styling).
+            self._myspresso_setup_navtoolbar()
 
         if whitep:
             self.qmc.palette['messages'] = '#ffffff'
@@ -6755,7 +6868,17 @@ class ApplicationWindow(QMainWindow):
 
 
 
-        self.level1layout.insertWidget(0,self.ntb)
+        # MySpresso fork: re-route the navtoolbar into the brand header when
+        # the header widget is present; otherwise fall back to level1layout
+        # so behaviour is unchanged for non-MySpresso forks.
+        _msh = getattr(self, 'myspresso_header', None)
+        if _msh is not None:
+            try:
+                _msh.host_navtoolbar(self.ntb)
+            except Exception:  # pylint: disable=broad-except
+                self.level1layout.insertWidget(0,self.ntb)
+        else:
+            self.level1layout.insertWidget(0,self.ntb)
 
         if str(canvas_color) == 'None':
             self.qmc.canvas.setStyleSheet('background-color:transparent;')
@@ -12172,7 +12295,9 @@ class ApplicationWindow(QMainWindow):
                 self.readingslcdsflags[0] = 0
 
     def showLCDs(self, changeDefault:bool = True) -> None:
-        self.lcd1.setVisible(True)
+        # MySpresso fork: hero panel replaces the legacy lcd1 timer.
+        # Keep lcd1 hidden so we don't show two timers in the main canvas.
+        self.lcd1.setVisible(False)
         self.lcdFrame.setVisible(True)
         self.readingsAction.setChecked(True)
         if changeDefault:

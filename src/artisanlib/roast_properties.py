@@ -64,6 +64,31 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QCheckBox, QComboBox, QDialo
 
 
 ########################################################################################
+#####################  MySpresso section header helper  ################################
+########################################################################################
+
+def _make_roast_section(n: str, text: str) -> QLabel:
+    """Numbered section header — red mono N + uppercase navy title + warm
+    bottom divider. Matches the SectionHeader component in the Claude
+    Design handoff (dialogs.jsx)."""
+    label = QLabel()
+    label.setTextFormat(Qt.TextFormat.RichText)
+    label.setText(
+        f'<span style="font-family:\'JetBrains Mono\',monospace;'
+        f'font-size:11px;font-weight:600;color:#A8392E;">{n}</span>'
+        f'&nbsp;&nbsp;'
+        f'<span style="font-size:12px;font-weight:700;color:#070D1F;'
+        f'letter-spacing:0.6px;">{text.upper()}</span>'
+    )
+    label.setStyleSheet(
+        'QLabel { padding: 14px 0 8px 0;'
+        ' border-bottom: 1px solid #E8E3D6;'
+        ' background: transparent; }'
+    )
+    return label
+
+
+########################################################################################
 #####################  Volume Calculator DLG  ##########################################
 ########################################################################################
 
@@ -833,31 +858,18 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.titleedit.setSizePolicy(QSizePolicy.Policy.MinimumExpanding,QSizePolicy.Policy.Fixed)
         self.titleedit.activated.connect(self.recentRoastActivated)
         self.titleedit.editTextChanged.connect(self.recentRoastEnabled)
-        if self.aw.app.darkmode:
-            if self.aw.qmc.palette['canvas'] == 'None':
-                canvas_color = 'white'
-            else:
-                canvas_color = self.aw.qmc.palette['canvas'][:7]
-            brightness_title = self.aw.QColorBrightness(QColor(self.aw.qmc.palette['title'][:7]))
-            brightness_canvas = self.aw.QColorBrightness(QColor(canvas_color))
-            # in dark mode we choose the darker color as background
-            if brightness_title > brightness_canvas:
-                backgroundcolor = QColor(canvas_color).name()
-                color = QColor(self.aw.qmc.palette['title'][:7]).name()
-            else:
-                backgroundcolor = QColor(self.aw.qmc.palette['title'][:7]).name()
-                color = QColor(canvas_color).name()
-            self.titleedit.setStyleSheet(
-                'QComboBox {padding-left: 2px; padding-right: 2px; padding-top: 1px;  font-weight: bold; background-color: ' + backgroundcolor + '; color: ' + color + ';} QComboBox QAbstractItemView {font-weight: normal;}')
-        else:
-            color = ''
-            if self.aw.qmc.palette['title'] != 'None':
-                color = ' color: ' + QColor(self.aw.qmc.palette['title'][:7]).name() + ';'
-            backgroundcolor = ''
-            if self.aw.qmc.palette['canvas'] != 'None':
-                backgroundcolor = ' background-color: ' + QColor(self.aw.qmc.palette['canvas'][:7]).name() + ';'
-            self.titleedit.setStyleSheet(
-                'QComboBox {padding-left: 2px; padding-right: 2px; padding-top: 1px; font-weight: bold;' + color + backgroundcolor + '} QComboBox QAbstractItemView {font-weight: normal;}')
+        # MySpresso fork: upstream used the chart-title colour (navy via our
+        # palette override) as the combo background, producing illegible
+        # dark-on-dark fields. Force the standard MySpresso input look —
+        # white background, navy text — and let the global QSS handle the
+        # rest (focus border, dark-mode override).
+        self.titleedit.setStyleSheet(
+            'QComboBox { background-color: #FFFFFF; color: #070D1F;'
+            ' padding-left: 8px; padding-right: 8px; padding-top: 4px;'
+            ' padding-bottom: 4px; font-weight: 600; }'
+            'QComboBox QAbstractItemView { font-weight: normal;'
+            ' background-color: #FFFFFF; color: #070D1F; }'
+        )
         self.titleedit.setView(QListView())
         self.titleShowAlwaysFlag = QCheckBox(QApplication.translate('CheckBox','Show Always'))
         self.titleShowAlwaysFlag.setToolTip(QApplication.translate('Tooltip','Display the roast title while roasting'))
@@ -1610,15 +1622,19 @@ class editGraphDlg(ArtisanResizeablDialog):
         databuttonLayout.addWidget(self.copydataTableButton)
         databuttonLayout.addStretch()
         #tab 1
+        # MySpresso fork: break the dense grid into numbered sections per the
+        # Claude Design "Propriétés de la torréfaction" mockup. Section
+        # headers are rich-text QLabels with a red mono number + uppercase
+        # navy title + thin warm bottom divider — matches the SectionHeader
+        # component from dialogs.jsx.
         self.tab1aLayout = QVBoxLayout()
         self.tab1aLayout.setContentsMargins(0,0,0,0)
-        self.tab1aLayout.setSpacing(0)
-#        self.tab1aLayout.addLayout(mainLayout)
-#        self.tab1aLayout.addStretch()
+        self.tab1aLayout.setSpacing(10)
+        self.tab1aLayout.addWidget(_make_roast_section('01', 'Identification'))
         self.tab1aLayout.addLayout(textLayout)
-#        self.tab1aLayout.addStretch()
-        self.tab1aLayout.setSpacing(8)
+        self.tab1aLayout.addWidget(_make_roast_section('02', 'Poids & Grains'))
         self.tab1aLayout.addLayout(propGrid)
+        self.tab1aLayout.addWidget(_make_roast_section('03', 'Conditions ambiantes'))
         self.tab1aLayout.addLayout(ambientGrid)
         tab1Layout = QVBoxLayout()
 #        tab1Layout.addStretch()
@@ -1670,11 +1686,54 @@ class editGraphDlg(ArtisanResizeablDialog):
             self.TabWidget.addTab(self.C6Widget,QApplication.translate('Tab', 'Setup'))
         #
         self.TabWidget.currentChanged.connect(self.tabSwitched)
+
+        # MySpresso fork: hide the tab bar so the dialog reads as a single
+        # scrollable form like the Claude Design mockup. The other tabs
+        # (Notes / Events / Data / Energy / Setup) remain functionally
+        # present but not visually exposed; they're toggled via Cmd+1..6
+        # keyboard shortcut from the existing keyPressEvent handler.
+        try:
+            tab_bar = self.TabWidget.tabBar()
+            if tab_bar is not None:
+                tab_bar.setVisible(False)
+        except (AttributeError, RuntimeError):
+            pass
+
+        # MySpresso fork: brand header (coffee icon + title + subtitle) above
+        # the tab content — matches the DialogShell brand bar in dialogs.jsx.
+        _ms_header = QFrame()
+        _ms_header.setObjectName('MysDialogHeader')
+        _ms_header.setStyleSheet(
+            '#MysDialogHeader { background-color: #FFFFFF;'
+            ' border-bottom: 1px solid #E8E3D6; padding: 0px; }'
+        )
+        _ms_header_layout = QHBoxLayout(_ms_header)
+        _ms_header_layout.setContentsMargins(20, 16, 20, 16)
+        _ms_header_layout.setSpacing(12)
+        _ms_icon = QLabel('☕')
+        _ms_icon.setStyleSheet(
+            'QLabel { font-size: 22px; color: #A8392E; background: transparent; }'
+        )
+        _ms_header_layout.addWidget(_ms_icon)
+        _ms_title_block = QVBoxLayout()
+        _ms_title_block.setSpacing(2)
+        _ms_title = QLabel('Propriétés de la torréfaction')
+        _ms_title.setProperty('role', 'dialogTitle')
+        _ms_subtitle = QLabel(
+            'Renseigne les informations du roast avant ou pendant la session.'
+        )
+        _ms_subtitle.setProperty('role', 'dialogSubtitle')
+        _ms_title_block.addWidget(_ms_title)
+        _ms_title_block.addWidget(_ms_subtitle)
+        _ms_header_layout.addLayout(_ms_title_block)
+        _ms_header_layout.addStretch()
+
         #incorporate layouts
         totallayout = QVBoxLayout()
+        totallayout.addWidget(_ms_header)
         totallayout.addWidget(self.TabWidget)
         totallayout.addLayout(okLayout)
-        totallayout.setContentsMargins(10,10,10,0) # left, top, right, bottom
+        totallayout.setContentsMargins(0, 0, 0, 0) # left, top, right, bottom
         totallayout.setSpacing(0)
         self.volume_percent()
 
@@ -2150,30 +2209,41 @@ class editGraphDlg(ArtisanResizeablDialog):
                 self.plus_blends_combo.blockSignals(False)
 
     def markPlusCoffeeFields(self, b:bool) -> None:
-        # for QTextEdit
+        # MySpresso fork: the upstream cyan/teal marking (#0D658F / #e4f3f8)
+        # produced black-text-on-dark-blue boxes which were unreadable. Use
+        # warm/red tints that match the MySpresso palette and stay legible.
+        # Keep navy text on a very-light-red tint (red.050) in light mode and
+        # a soft warm-tinted dark in dark mode.
         if b:
             if self.aw.app.darkmode:
-                self.beansedit.setStyleSheet('QTextEdit { background-color: #0D658F; selection-background-color: darkgray; }')
+                marked_textedit = (
+                    'QTextEdit { background-color: #3E2A22; color: #F0EDE5;'
+                    ' selection-background-color: #5E3C30; }'
+                )
+                marked_lineedit = (
+                    'QLineEdit { background-color: #3E2A22; color: #F0EDE5;'
+                    ' selection-background-color: #5E3C30; }'
+                )
             else:
-                self.beansedit.setStyleSheet('QTextEdit { background-color: #e4f3f8; selection-background-color: darkgray;  }')
+                marked_textedit = (
+                    'QTextEdit { background-color: #FAEDEB; color: #070D1F;'
+                    ' selection-background-color: #E8B5AF; }'
+                )
+                marked_lineedit = (
+                    'QLineEdit { background-color: #FAEDEB; color: #070D1F;'
+                    ' selection-background-color: #E8B5AF; }'
+                )
+            self.beansedit.setStyleSheet(marked_textedit)
+            self.bean_density_in_edit.setStyleSheet(marked_lineedit)
+            self.bean_size_min_edit.setStyleSheet(marked_lineedit)
+            self.bean_size_max_edit.setStyleSheet(marked_lineedit)
+            self.moisture_greens_edit.setStyleSheet(marked_lineedit)
         else:
             self.beansedit.setStyleSheet('QTextEdit { }')
-        # for QLineEdit
-        if b:
-            if self.aw.app.darkmode:
-                qlineedit_marked_style = 'QLineEdit { background-color: #0D658F; selection-background-color: darkgray; }'
-            else:
-                qlineedit_marked_style = 'QLineEdit { background-color: #e4f3f8; selection-background-color: #424242; }'
-            self.bean_density_in_edit.setStyleSheet(qlineedit_marked_style)
-            self.bean_size_min_edit.setStyleSheet(qlineedit_marked_style)
-            self.bean_size_max_edit.setStyleSheet(qlineedit_marked_style)
-            self.moisture_greens_edit.setStyleSheet(qlineedit_marked_style)
-        else:
-            background_white_style = ''
-            self.bean_density_in_edit.setStyleSheet(background_white_style)
-            self.bean_size_min_edit.setStyleSheet(background_white_style)
-            self.bean_size_max_edit.setStyleSheet(background_white_style)
-            self.moisture_greens_edit.setStyleSheet(background_white_style)
+            self.bean_density_in_edit.setStyleSheet('')
+            self.bean_size_min_edit.setStyleSheet('')
+            self.bean_size_max_edit.setStyleSheet('')
+            self.moisture_greens_edit.setStyleSheet('')
 
     def updateTitle(self, prev_coffee_label:str|None, prev_blend_label:str|None) -> None:
         titles_to_be_overwritten = [ '', QApplication.translate('Scope Title', 'Roaster Scope') ]

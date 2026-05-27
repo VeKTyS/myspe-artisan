@@ -441,7 +441,9 @@ def pushButtonColorStyle(
     return f'{class_name}{selector}{state}{{{color}{background}{font_size_str}}}'
 
 class EventPushButton(QPushButton):
-    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#777777') -> None:
+    # MySpresso fork: default warm-gray (WARM_600) instead of upstream #777777
+    # so unspecialized event buttons inherit MySpresso palette.
+    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#7A736A') -> None:
         super().__init__(text, parent)
         self.default_background_color = background_color
         self.default_style = pushButtonColorStyle('*',
@@ -461,12 +463,14 @@ class EventPushButton(QPushButton):
 
 
 class MajorEventPushButton(EventPushButton): # pylint: disable=too-few-public-methods
-    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#147bb3') -> None:
+    # MySpresso fork: default navy (NAVY_700) instead of upstream blue.
+    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#0F1E3D') -> None:
         super().__init__(text, parent, background_color)
 
 
 class AnimatedMajorEventPushButton(MajorEventPushButton):
-    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#147bb3') -> None:
+    # MySpresso fork: default navy (NAVY_700) instead of upstream blue.
+    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#0F1E3D') -> None:
         super().__init__(text, parent, background_color)
 
         # we make the dark animation color slightly darker than the background:
@@ -546,11 +550,45 @@ class AnimatedMajorEventPushButton(MajorEventPushButton):
     zcolor = pyqtProperty(QColor, getBackColor, setBackColor)
 
 class MinorEventPushButton(EventPushButton): # pylint: disable=too-few-public-methods
-    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#4c97c3') -> None:
+    # MySpresso fork: outlined warm style by default (transparent fill, warm
+    # border, navy text). Once fired (Selected=true) the button fills with the
+    # provided background_color so the user can see the event was recorded.
+    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#7A736A') -> None:
         super().__init__(text, parent, background_color)
+        outlined = (
+            'QPushButton[Selected=false]:!flat:!hover:!pressed{'
+            'background-color: transparent;'
+            'color: #0F1E3D;'
+            'border: 1px solid #D9D2C5;'
+            'border-radius: 2px;'
+            'padding: 4px 8px;'
+            '}'
+            'QPushButton[Selected=false]:!flat:hover:!pressed{'
+            'background-color: #F2EFE7;'
+            'color: #0F1E3D;'
+            'border: 1px solid #7A736A;'
+            'border-radius: 2px;'
+            '}'
+            'QPushButton[Selected=false]:!flat:pressed{'
+            f'background-color: {background_color};'
+            'color: #FAF8F4;'
+            'border: 1px solid ' + background_color + ';'
+            'border-radius: 2px;'
+            '}'
+            'QPushButton[Selected=true]:!flat{'
+            f'background-color: {background_color};'
+            'color: #FAF8F4;'
+            'border: 1px solid ' + background_color + ';'
+            'border-radius: 2px;'
+            'padding: 4px 8px;'
+            '}'
+        )
+        self.default_style = outlined
+        self.setStyleSheet(outlined)
 
 class AuxEventPushButton(EventPushButton): # pylint: disable=too-few-public-methods
-    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#bdbdbd') -> None:
+    # MySpresso fork: default warm (WARM_500) instead of upstream light gray.
+    def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#A8A092') -> None:
         super().__init__(text, parent, background_color)
 
 
