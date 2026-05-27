@@ -39,6 +39,8 @@ schedule_date_tag: Final[str] = 'scheduleDate' # send as 's_item_date' as part o
 # Service URLs (dynamic resolution: env > QSettings > compiled default)
 
 _DEFAULT_API_BASE_URL: Final[str] = 'https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api/v1'
+# Supabase anon (public) key — safe to ship in the client, does NOT bypass RLS.
+SUPABASE_ANON_KEY: Final[str] = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlZHF1cHJ0ZHhwZmJ0a3BwcWlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDI3MDgsImV4cCI6MjA5NDY3ODcwOH0.DsEMMt206JRax_CgV8vEX1JCAedMac1kyLz0z--IctI'
 # Placeholder dev value. Must be overridden via MYSPRESSO_WEB_URL or QSettings
 # before re-enabling auth, otherwise register/reset-password links will be broken.
 _DEFAULT_WEB_BASE_URL: Final[str] = 'http://localhost:3000'
@@ -49,15 +51,12 @@ def _resolve_api_base_url() -> str:
     if env:
         return env.rstrip('/')
     try:
-        # QSettings may be queried before QApplication exists (import-time):
-        # in that case it falls back to system defaults, which is fine; if it
-        # fails outright we still want the app to boot with the compiled default.
         stored = QSettings().value('cloud/api_base_url', '', type=str)
-    except Exception:  # noqa: BLE001 - we intentionally swallow any QSettings failure
+    except Exception:  # noqa: BLE001
         stored = ''
     if stored:
         return stored.rstrip('/')
-    return _DEFAULT_API_BASE_URL
+    return ''  # empty → connection blocked until URL is configured in settings
 
 
 def _resolve_web_base_url() -> str:
