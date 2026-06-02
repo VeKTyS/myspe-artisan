@@ -66,10 +66,15 @@ jobs:
     name: Build Windows
     runs-on: windows-latest
     steps:
-      # Le spec hardcode ARTISAN_SRC = C:\projects\artisan\src → on checkout là
       - uses: actions/checkout@v4
-        with:
-          path: C:\projects\artisan
+
+      # Le spec hardcode ARTISAN_SRC = C:\projects\artisan\src
+      # GitHub interdit les checkouts hors workspace → junction NTFS
+      - name: Create junction C:\projects\artisan → workspace
+        shell: cmd
+        run: |
+          mkdir C:\projects
+          mklink /J C:\projects\artisan %GITHUB_WORKSPACE%
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
@@ -78,7 +83,7 @@ jobs:
           cache: 'pip'
 
       - name: Install Python dependencies
-        working-directory: C:\projects\artisan\src
+        working-directory: src
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -95,7 +100,7 @@ jobs:
 
       - name: Get version
         id: version
-        working-directory: C:\projects\artisan\src
+        working-directory: src
         run: |
           $v = python -c "import artisanlib; print(artisanlib.__version__)"
           $b = python -c "import artisanlib; print(artisanlib.__build__)"
@@ -103,7 +108,7 @@ jobs:
           echo "build=$b"   >> $env:GITHUB_OUTPUT
 
       - name: Generate derived files
-        working-directory: C:\projects\artisan\src
+        working-directory: src
         shell: cmd
         env:
           APPVEYOR: 'True'
@@ -114,12 +119,12 @@ jobs:
           call build-derived-win.bat
 
       - name: Create version info file
-        working-directory: C:\projects\artisan\src
+        working-directory: src
         run: |
           create-version-file version-metadata.yml --outfile version_info-win.txt --version ${{ steps.version.outputs.version }}.${{ steps.version.outputs.build }}
 
       - name: Build with PyInstaller
-        working-directory: C:\projects\artisan\src
+        working-directory: src
         shell: cmd
         env:
           APPVEYOR: 'True'
@@ -131,7 +136,7 @@ jobs:
           pyinstaller --noconfirm --log-level=WARN artisan-win.spec
 
       - name: Build NSIS installer
-        working-directory: C:\projects\artisan\src
+        working-directory: src
         shell: cmd
         env:
           PRODUCT_VERSION: ${{ steps.version.outputs.version }}
@@ -147,7 +152,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: C:\projects\artisan\src\artisan-win-*.exe
+          path: src/artisan-win-*.exe
           if-no-files-found: warn
           retention-days: 1
 
