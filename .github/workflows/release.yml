@@ -13,7 +13,7 @@ on:
 jobs:
   build-macos:
     name: Build macOS
-    runs-on: macos-13  # dernier runner Intel x86_64 (le spec cible x86_64)
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -97,6 +97,12 @@ jobs:
 
       - name: Install NSIS
         run: choco install nsis -y
+
+      - name: Download vc_redist.x64.exe
+        shell: powershell
+        run: |
+          # Le spec win cherche vc_redist.x64.exe dans le dossier parent de src
+          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "vc_redist.x64.exe"
 
       - name: Get version
         id: version
