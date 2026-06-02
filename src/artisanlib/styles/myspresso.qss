@@ -703,9 +703,22 @@ QToolTip {
 [theme="dark"] QDoubleSpinBox:focus { border-color: #7A8FB8; }
 [theme="dark"] QComboBox QAbstractItemView {
     background-color: #1E2128;
+    color: #F0EDE5;
     border-color: #3E444F;
     selection-background-color: #262A33;
     selection-color: #F0EDE5;
+}
+[theme="dark"] QComboBox QAbstractItemView::item {
+    color: #F0EDE5;
+    background-color: transparent;
+}
+[theme="dark"] QComboBox QAbstractItemView::item:selected {
+    background-color: #262A33;
+    color: #F0EDE5;
+}
+[theme="dark"] QComboBox QAbstractItemView::item:hover {
+    background-color: #2E333C;
+    color: #F0EDE5;
 }
 [theme="dark"] QTabBar::tab           { color: #B4ADA0; }
 [theme="dark"] QTabBar::tab:selected  { color: #F0EDE5; border-bottom-color: #D78A82; }
