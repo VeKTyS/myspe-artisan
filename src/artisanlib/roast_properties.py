@@ -2983,7 +2983,8 @@ class editGraphDlg(ArtisanResizeablDialog):
         if hasattr(self, 'plus_coffees_combo'):
             id_grid.addWidget(_field_label(QApplication.translate('Label', 'Stock')), 2, 0)
             stock_box = QWidget()
-            stock_box.setStyleSheet('QWidget { background: transparent; }')
+            stock_box.setObjectName('MysStockBox')
+            stock_box.setStyleSheet('#MysStockBox { background: transparent; }')
             sh = QHBoxLayout(stock_box)
             sh.setContentsMargins(0, 0, 0, 0)
             sh.setSpacing(6)
