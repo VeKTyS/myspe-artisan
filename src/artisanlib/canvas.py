@@ -14657,6 +14657,10 @@ class tgraphcanvas(QObject):
                                 return
                             if self.aw.pidcontrol.pidOnCHARGE and not self.aw.pidcontrol.pidActive: # Arduino/TC4, Hottop, MODBUS
                                 self.aw.pidcontrol.pidOn()
+                        # generate UUID at CHARGE time so /asession/start and /aroast share the same id
+                        if self.roastUUID is None:
+                            import uuid as _uuid_mod
+                            self.roastUUID = _uuid_mod.uuid4().hex
                         if self.chargeTimerPeriod > 0:
                             self.aw.setTimerColorSignal.emit('timer')
                         try:
@@ -14743,6 +14747,22 @@ class tgraphcanvas(QObject):
                     _log.exception(e)
                 if self.roastpropertiesAutoOpenFlag:
                     self.aw.openPropertiesSignal.emit()
+                # notify MySpresso webapp that a roast session has started
+                try:
+                    from plus.myspresso_session import send_session_start
+                    _machine = getattr(self, 'roastertype', '') or ''
+                    _coffee = getattr(self, 'plus_coffee_label', '') or ''
+                    _batch_kg = 0.0
+                    try:
+                        from artisanlib.util import convertWeight, weight_units
+                        _w_in = self.weight[0]
+                        _w_unit = self.weight[2]
+                        _batch_kg = convertWeight(_w_in, weight_units.index(_w_unit), weight_units.index('Kg')) or 0.0
+                    except Exception:  # pylint: disable=broad-except
+                        pass
+                    send_session_start(self.roastUUID or '', _machine, _coffee, _batch_kg)
+                except Exception as e:  # pylint: disable=broad-except
+                    _log.exception(e)
             self.aw.onMarkMoveToNext(self.aw.buttonCHARGE)
 
     # called via markTPSignal (queued), triggered by external device

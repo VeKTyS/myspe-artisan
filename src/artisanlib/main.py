@@ -25907,6 +25907,8 @@ class ApplicationWindow(QMainWindow):
             from artisanlib.roast_properties import editGraphDlg
             self.editgraphdialog = editGraphDlg(self,self,self.editGraphDlg_activeTab,start_recording_on_exit)
             self.editgraphdialog.show()
+            self.editgraphdialog.raise_()
+            self.editgraphdialog.activateWindow()
 
     @pyqtSlot()
     @pyqtSlot(bool)

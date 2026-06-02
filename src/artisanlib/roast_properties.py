@@ -2271,9 +2271,13 @@ class editGraphDlg(ArtisanResizeablDialog):
                         if len(self.plus_stores) == 1:
                             self.plus_default_store = plus.stock.getStoreId(self.plus_stores[0])
                         if len(self.plus_stores) < 2:
-                            self.plusLineStoresFrame.hide()
+                            # MySpresso design: hide store combo when only one store
+                            self.plus_stores_combo.setVisible(False)
                         else:
-                            self.plusLineStoresFrame.show()
+                            self.plus_stores_combo.setVisible(True)
+                        # keep legacy frame permanently hidden (reparented in _build_myspresso_tab1)
+                        if hasattr(self, 'plusLineStoresFrame'):
+                            self.plusLineStoresFrame.hide()
                     except Exception as e:  # pylint: disable=broad-except
                         _log.exception(e)
                     self.plus_stores_combo.blockSignals(True)
@@ -3157,6 +3161,18 @@ class editGraphDlg(ArtisanResizeablDialog):
 
         root.addLayout(amb)
         root.addStretch(1)
+
+        # Reparent legacy orphan frames so they are never shown as top-level
+        # windows. In the MySpresso design their widgets have been moved into
+        # id_grid / pg / amb above; the frames themselves must stay hidden.
+        for _orphan_attr in ('plusLineStoresFrame',):
+            try:
+                _w = getattr(self, _orphan_attr, None)
+                if _w is not None:
+                    _w.setParent(self)
+                    _w.hide()
+            except Exception:  # pylint: disable=broad-except
+                pass
 
     # called on CANCEL or WINDOW_CLOSE; reverts state and calls clean_up_and_close()
     @pyqtSlot()
