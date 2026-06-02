@@ -13,7 +13,7 @@ on:
 jobs:
   build-macos:
     name: Build macOS
-    runs-on: macos-latest
+    runs-on: macos-13  # dernier runner Intel x86_64 (le spec cible x86_64)
     steps:
       - uses: actions/checkout@v4
 
@@ -79,7 +79,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller create-version-file
+          pip install pyinstaller
+          # create-version-file est fourni par pyinstaller-versionfile (déjà dans requirements.txt)
 
       - name: Install Qt via aqtinstall
         run: |
