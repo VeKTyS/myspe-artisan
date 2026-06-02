@@ -1,0 +1,220 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name for the release (e.g. v1.0.0)'
+        required: true
+
+jobs:
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: src
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Get version
+        id: version
+        working-directory: src
+        run: |
+          echo "version=$(python3 -c 'import artisanlib; print(artisanlib.__version__)')" >> $GITHUB_OUTPUT
+
+      - name: Generate derived files
+        working-directory: src
+        run: |
+          PYTHON_PATH=$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+          export PYTHON_PATH
+          chmod +x build-derived.sh
+          ./build-derived.sh macos
+
+      - name: Build with PyInstaller
+        working-directory: src
+        run: |
+          pyinstaller -y --log-level=INFO artisan-mac.spec
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: src/artisan-mac-*.dmg
+          retention-days: 1
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: src
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller create-version-file
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Get version
+        id: version
+        working-directory: src
+        run: |
+          $v = python -c "import artisanlib; print(artisanlib.__version__)"
+          $b = python -c "import artisanlib; print(artisanlib.__build__)"
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+          echo "build=$b" >> $env:GITHUB_OUTPUT
+
+      - name: Generate derived files
+        working-directory: src
+        run: |
+          call build-derived-win.bat
+        shell: cmd
+
+      - name: Create version info file
+        working-directory: src
+        run: |
+          create-version-file version-metadata.yml --outfile version_info-win.txt --version ${{ steps.version.outputs.version }}.${{ steps.version.outputs.build }}
+
+      - name: Build with PyInstaller
+        working-directory: src
+        run: |
+          pyinstaller --noconfirm --log-level=WARN artisan-win.spec
+
+      - name: Build NSIS installer
+        working-directory: src
+        shell: cmd
+        run: |
+          if exist "%ProgramFiles(x86)%\NSIS\makensis.exe" (
+            "%ProgramFiles(x86)%\NSIS\makensis.exe" artisan.nsi
+          ) else (
+            "%ProgramFiles%\NSIS\makensis.exe" artisan.nsi
+          )
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: src/artisan-win-*.exe
+          retention-days: 1
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libusb-1.0-0 \
+            libusb-1.0-0-dev \
+            libudev-dev \
+            libxcb-xinerama0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-xkb1 \
+            libxkbcommon-x11-0 \
+            libdbus-1-3 \
+            libglib2.0-0 \
+            ruby \
+            ruby-dev \
+            rpm \
+            fakeroot
+          sudo gem install fpm
+
+      - name: Install Python dependencies
+        working-directory: src
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Get version
+        id: version
+        working-directory: src
+        run: |
+          echo "version=$(python3 -c 'import artisanlib; print(artisanlib.__version__)')" >> $GITHUB_OUTPUT
+
+      - name: Generate derived files
+        working-directory: src
+        run: |
+          export PYTHON_PATH=$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+          chmod +x build-derived.sh
+          ./build-derived.sh linux
+
+      - name: Build with PyInstaller
+        working-directory: src
+        run: |
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+          ln -sf /lib/x86_64-linux-gnu/libusb-1.0.so.0 libusb-1.0.so.0 || true
+          pyinstaller -y --log-level=INFO artisan-linux.spec
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            src/artisan-linux-*.deb
+            src/artisan-linux-*.rpm
+            src/artisan-linux-*.AppImage
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag }}
+          name: Artisan MySpresso ${{ github.ref_name || inputs.tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: artifacts/**/*
