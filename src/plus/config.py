@@ -133,8 +133,22 @@ reset_passwd_url: str = web_base_url + '/resetPassword'
 auth_url: str = api_base_url + '/accounts/users/authenticate'
 stock_url: str = api_base_url + '/acoffees'
 roast_url: str = api_base_url + '/aroast'
+session_url: str = api_base_url + '/asession/start'
 lock_schedule_url: str = api_base_url + '/aschedule/lock'
 notifications_url: str = api_base_url + '/notifications'
+
+# Artisan service JWT — used as Bearer token for the /asession/start endpoint.
+# Not the Supabase anon key; this is a short-lived user JWT issued by the
+# MySpresso auth system. Rotate via MYSPRESSO_ARTISAN_TOKEN env var.
+artisan_service_token: str = (
+    lambda: __import__('os').environ.get(
+        'MYSPRESSO_ARTISAN_TOKEN',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
+        '.eyJzdWIiOiI2MzU2NWJhZWEwYmQzYTMzNTE2ZWE0N2IiLCJpYXQiOjE3NzkyNzE0OTUs'
+        'ImV4cCI6MTc4MTY5MDY5NX0'
+        '.7Eu31L2My4vyOYO5S6ZPH-lWQZU5MsJIIIq9xd4CPYM',
+    )
+)()
 
 # Connection configurations
 
