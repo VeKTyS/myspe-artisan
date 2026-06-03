@@ -29,7 +29,12 @@ if TYPE_CHECKING:
 
 
 _ICON_DIR = pathlib.Path(__file__).parent.parent / 'icons' / 'myspresso'
-_LOGO_PATH = _ICON_DIR / 'logo.webp'
+# Prefer PNG (universally supported by Qt on all platforms including Windows).
+# Fall back to webp for legacy builds that only ship that asset.
+_LOGO_PATH = next(
+    (p for p in (_ICON_DIR / 'logo.png', _ICON_DIR / 'logo.webp') if p.is_file()),
+    _ICON_DIR / 'logo.png',
+)
 
 
 class MySpressoHeader(QFrame):

@@ -1077,6 +1077,8 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.weightpercentlabel.setMaximumWidth(55)
         self.weightpercentlabel.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.percent()
+        self.bag_count_label = QLabel('')
+        self.bag_count_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.weightinedit.editingFinished.connect(self.weightineditChanged)
         self.weightoutedit.editingFinished.connect(self.weightouteditChanged)
         self.unitsComboBox = QComboBox()
@@ -2603,6 +2605,7 @@ class editGraphDlg(ArtisanResizeablDialog):
             self.fillCoffeeData(selected_coffee,prev_coffee_label,prev_blend_label)
         self.checkWeightIn()
         self.updatePlusSelectedLine()
+        self.updateBagCount()
 
     def getBlendDictCurrentWeight(self, blend:tuple[str, tuple[plus.stock.Blend, plus.stock.StockItem, float, dict[str, str], float, list[tuple[float, plus.stock.Blend]]]]) -> plus.stock.Blend:
         if self.weightinedit.text() != '':
@@ -2661,6 +2664,7 @@ class editGraphDlg(ArtisanResizeablDialog):
 
         self.checkWeightIn()
         self.updatePlusSelectedLine()
+        self.updateBagCount()
 
     # keeps the weightoutdefectsedit placeholder text set along the weightoutedit text
     def weightouteditSetText(self, txt:str) -> None:
@@ -3029,11 +3033,16 @@ class editGraphDlg(ArtisanResizeablDialog):
         pg.addWidget(_col_header('Vert'), 0, 1)
         pg.addWidget(_col_header('Torréfié'), 0, 2)
 
-        # Poids (weight in/out + units combo)
+        # Poids (weight in/out + units combo + bag count)
         pg.addWidget(_field_label(QApplication.translate('Label', 'Weight')), 1, 0)
         pg.addWidget(self.weightinedit, 1, 1)
         pg.addWidget(self.weightoutedit, 1, 2)
         pg.addWidget(self.unitsComboBox, 1, 3)
+        self.bag_count_label.setStyleSheet(
+            'QLabel { font-size: 12px; color: #4E4A44;'
+            ' background: transparent; padding-left: 8px; }'
+        )
+        pg.addWidget(self.bag_count_label, 1, 4)
 
         # Défauts — left placeholder (no Vert defects) + weightoutdefectsedit
         pg.addWidget(_field_label(QApplication.translate('Label', 'Defects')), 2, 0)
@@ -3174,6 +3183,7 @@ class editGraphDlg(ArtisanResizeablDialog):
                     _w.hide()
             except Exception:  # pylint: disable=broad-except
                 pass
+        self.updateBagCount()
 
     # called on CANCEL or WINDOW_CLOSE; reverts state and calls clean_up_and_close()
     @pyqtSlot()
@@ -3378,6 +3388,7 @@ class editGraphDlg(ArtisanResizeablDialog):
                 self.aw.schedule_window.cancel_completed_item_edit()
         except Exception: # pylint: disable=broad-except
             pass
+        self.updateBagCount()
 
     @pyqtSlot(int)
     def changeVolumeUnit(self, i:int) -> None:
@@ -5577,6 +5588,35 @@ class editGraphDlg(ArtisanResizeablDialog):
         else:
             self.weightinedit.setStyleSheet("""QLineEdit { font-weight: bold; color: #CC0F50; }""")
 
+    def updateBagCount(self) -> None:
+        label = ''
+        try:
+            coffee_id = getattr(self, 'plus_coffee_selected', None)
+            if coffee_id is not None:
+                coffee = plus.stock.getCoffee(coffee_id)
+                if coffee is not None and 'default_unit' in coffee:
+                    du = coffee['default_unit']
+                    size = int(du.get('size', 0))
+                    if size > 0 and self.weightinedit.text().strip() not in {'', '0'}:
+                        weight_in = float(comma2dot(self.weightinedit.text()))
+                        weight_unit_idx = self.unitsComboBox.currentIndex()
+                        weight_kg = convertWeight(weight_in, weight_unit_idx, weight_units.index('Kg'))
+                        if weight_kg > 0:
+                            nb = math.ceil(weight_kg / size)
+                            kg_str = f'{float2floatWeightVolume(weight_kg):g} kg'
+                            if nb >= 1:
+                                unit_name = du.get('name', 'bag')
+                                if nb == 1:
+                                    u = plus.stock.unit_translations_singular.get(unit_name, unit_name)
+                                else:
+                                    u = plus.stock.unit_translations_plural.get(unit_name, unit_name)
+                                label = f'{kg_str} – {nb} {u}'
+                            else:
+                                label = kg_str
+        except Exception:  # pylint: disable=broad-except
+            pass
+        self.bag_count_label.setText(label)
+
     @pyqtSlot()
     def weightineditChanged(self) -> None:
         weight_in = comma2dot(str(self.weightinedit.text()))
@@ -5601,6 +5641,7 @@ class editGraphDlg(ArtisanResizeablDialog):
                 self.coffeeSelectionChanged(coffee_idx)
         self.weightinedit.setText(weight_in) # need to set it here again as blendSelectionChanged/coffeeSelectionChanged do update a 0
         self.checkWeightOut()
+        self.updateBagCount()
 
     def density_percent(self) -> None:
         percent = 0.

@@ -479,8 +479,7 @@ unit_translations_plural = {
 
 
 def renderAmount(amount:float, default_unit:CoffeeUnit|None=None, target_unit_idx:int=0) -> str:
-    res = ''
-    # first try to convert to default_unit (like "bags")
+    kg_str = render_weight(amount, 1, weight_units.index('Kg'), brief=2)
     try:
         if default_unit is not None:
             unit_size = int(default_unit['size'])
@@ -490,16 +489,10 @@ def renderAmount(amount:float, default_unit:CoffeeUnit|None=None, target_unit_id
                     u = unit_translations_plural[default_unit['name']]
                 else:
                     u = unit_translations_singular[default_unit['name']]
-                res = f'{int(round(a))}{u}'
+                return f'{kg_str} – {int(round(a))}{u}'
     except Exception:  # pylint: disable=broad-except
         pass
-    # if we could not convert to default_unit type,
-    # we convert to the weightunit
-    if not res:
-        # we convert the amount from kg to the target_unit
-        # brief=2: we render with kg with only 1 decimal instead of 3 (potentially losing precision)
-        res = render_weight(amount, 1, target_unit_idx, brief=2)
-    return res
+    return kg_str
 
 
 # ==================
