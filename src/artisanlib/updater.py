@@ -114,11 +114,28 @@ class UpdateBanner(QFrame):
 
         self.setFixedHeight(44)
         self.setObjectName('UpdateBanner')
+        # All child selectors here so they override the global QWidget/QFrame rules
         self.setStyleSheet(
             'QFrame#UpdateBanner {'
             '  background: #0F1932;'
             '  border-bottom: 1px solid #A8392E;'
             '}'
+            'QFrame#UpdateBanner QLabel {'
+            '  color: #F5F1E8;'
+            '  background: transparent;'
+            '  font-family: Montserrat, sans-serif;'
+            '  font-size: 12px;'
+            '}'
+            'QFrame#UpdateBanner QPushButton#updateBtn {'
+            '  background: #A8392E; color: #FFFFFF; border: none;'
+            '  border-radius: 4px; padding: 0 12px;'
+            '  font-family: Montserrat, sans-serif; font-size: 11px; font-weight: 600;'
+            '}'
+            'QFrame#UpdateBanner QPushButton#updateBtn:hover { background: #C44236; }'
+            'QFrame#UpdateBanner QPushButton#dismissBtn {'
+            '  color: #7A8499; background: transparent; border: none; font-size: 13px;'
+            '}'
+            'QFrame#UpdateBanner QPushButton#dismissBtn:hover { color: #F5F1E8; }'
         )
 
         layout = QHBoxLayout(self)
@@ -126,9 +143,6 @@ class UpdateBanner(QFrame):
         layout.setSpacing(12)
 
         self._label = QLabel(f'Zabawa Roast {version} est disponible')
-        self._label.setStyleSheet(
-            'color: #F5F1E8; font-family: Montserrat, sans-serif; font-size: 12px;'
-        )
 
         self._progress = QProgressBar()
         self._progress.setRange(0, 100)
@@ -137,23 +151,13 @@ class UpdateBanner(QFrame):
         self._progress.hide()
 
         self._update_btn = QPushButton('Mettre à jour')
+        self._update_btn.setObjectName('updateBtn')
         self._update_btn.setFixedHeight(28)
-        self._update_btn.setStyleSheet(
-            'QPushButton {'
-            '  background: #A8392E; color: white; border: none;'
-            '  border-radius: 4px; padding: 0 12px;'
-            '  font-family: Montserrat, sans-serif; font-size: 11px; font-weight: 600;'
-            '}'
-            'QPushButton:hover { background: #C44236; }'
-        )
         self._update_btn.clicked.connect(self._start_download)
 
         self._dismiss_btn = QPushButton('✕')
+        self._dismiss_btn.setObjectName('dismissBtn')
         self._dismiss_btn.setFixedSize(24, 24)
-        self._dismiss_btn.setStyleSheet(
-            'QPushButton { color: #7A8499; background: transparent; border: none; font-size: 13px; }'
-            'QPushButton:hover { color: #F5F1E8; }'
-        )
         self._dismiss_btn.clicked.connect(self._dismiss)
 
         layout.addWidget(self._label)
@@ -188,8 +192,8 @@ class UpdateBanner(QFrame):
         self._label.setText('Échec du téléchargement.')
         self._progress.hide()
         open_btn = QPushButton('Ouvrir le dossier')
+        open_btn.setObjectName('updateBtn')
         open_btn.setFixedHeight(28)
-        open_btn.setStyleSheet(self._update_btn.styleSheet())
         # _downloader is always set before this slot can fire
         fallback_path = os.path.join(self._downloader._dest_dir, self._asset_name)  # type: ignore[union-attr]
         open_btn.clicked.connect(lambda: _open_folder_fallback(fallback_path))
