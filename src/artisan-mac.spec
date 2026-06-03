@@ -152,7 +152,7 @@ exe = EXE(pyz,
             a.datas if onefile else [],
             options=[], # runtime python options
             exclude_binaries=not onefile,
-            name='Artisan',
+            name='Zabawa Roast',
             debug=False,
             bootloader_ignore_signals=False,
             strip=True, # not recommended for Windows
@@ -175,11 +175,11 @@ except Exception: # pylint: disable=broad-except
 plist = {}
 with open('Info.plist', 'rb') as infile:
     plist = plistlib.load(infile)
-    plist.update({ 'CFBundleDisplayName': 'Artisan',
-                    'CFBundleGetInfoString': 'Artisan, Roast Logger',
-                    'CFBundleIdentifier': 'org.artisan-scope.artisan',
+    plist.update({ 'CFBundleDisplayName': 'Zabawa Roast',
+                    'CFBundleGetInfoString': 'Zabawa Roast, Roast Logger by MySpresso',
+                    'CFBundleIdentifier': 'com.myspresso.zabawa-roast',
                     'CFBundleShortVersionString': VERSION,
-                    'CFBundleVersion': 'Artisan ' + VERSION,
+                    'CFBundleVersion': 'Zabawa Roast ' + VERSION,
                     'LSMinimumSystemVersion': minimumSystemVersion,
                     'LSMultipleInstancesProhibited': False,
                     'LSArchitecturePriority': ['x86_64'],
