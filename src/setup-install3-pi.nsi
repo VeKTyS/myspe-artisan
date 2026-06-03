@@ -67,7 +67,7 @@ RequestExecutionLevel admin
 
 !macro IsRunning
   Delete "$TEMP\25b241e1.tmp"
-  nsExec::Exec "cmd /c for /f $\"tokens=1,2$\" %i in ('tasklist') do (if /i %i EQU artisan.exe fsutil file createnew $TEMP\25b241e1.tmp 0)"
+  nsExec::Exec "cmd /c for /f $\"tokens=1,2$\" %i in ('tasklist') do (if /i %i EQU zabawa-roast.exe fsutil file createnew $TEMP\25b241e1.tmp 0)"
   IfFileExists $TEMP\25b241e1.tmp 0 notRunning
     ;we have at least one main window active
     MessageBox MB_OK|MB_ICONEXCLAMATION "Artisan was found to be running. Please close all instances then try the installer again." /SD IDOK
@@ -124,11 +124,11 @@ RequestExecutionLevel admin
 
 
 ; HM NIS Edit Wizard helper defines
-!define pyinstallerOutputDir 'dist/artisan'
-!define PRODUCT_NAME "Artisan"
-!define PRODUCT_PUBLISHER "The Artisan Team"
-!define PRODUCT_WEB_SITE "https://github.com/artisan-roaster-scope/artisan/blob/master/README.md"
-!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\artisan.exe"
+!define pyinstallerOutputDir 'dist/zabawa-roast'
+!define PRODUCT_NAME "Zabawa Roast"
+!define PRODUCT_PUBLISHER "MySpresso"
+!define PRODUCT_WEB_SITE "https://www.myspresso.com"
+!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\zabawa-roast.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
 
@@ -166,7 +166,7 @@ SetCompressor lzma
 
 ; MUI Settings
 !define MUI_ABORTWARNING
-!define MUI_ICON "artisan.ico"
+!define MUI_ICON "artisan.ico"  ; TODO: replace with zabawa-roast.ico
 !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
 
 ; Welcome page
@@ -190,8 +190,8 @@ SetCompressor lzma
 ; MUI end ------
 
 Name "${PRODUCT_NAME}"
-OutFile "artisan-win-x64${LEGACY_STR}-${PRODUCT_VERSION}-setup.exe"
-InstallDir "C:\Program Files\Artisan"
+OutFile "zabawa-roast-win-x64${LEGACY_STR}-${PRODUCT_VERSION}-setup.exe"
+InstallDir "C:\Program Files\Zabawa Roast"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show
 ShowUnInstDetails show
@@ -262,9 +262,9 @@ Section "MainSection" SEC01
   SetOutPath "$INSTDIR"
   SetOverwrite on
   File /r '${pyinstallerOutputDir}\*.*'
-  CreateDirectory "$SMPROGRAMS\Artisan"
-  CreateShortCut "$SMPROGRAMS\Artisan\Artisan.lnk" "$INSTDIR\artisan.exe"
-  CreateShortCut "$DESKTOP\Artisan.lnk" "$INSTDIR\artisan.exe"
+  CreateDirectory "$SMPROGRAMS\Zabawa Roast"
+  CreateShortCut "$SMPROGRAMS\Zabawa Roast\Zabawa Roast.lnk" "$INSTDIR\zabawa-roast.exe"
+  CreateShortCut "$DESKTOP\Zabawa Roast.lnk" "$INSTDIR\zabawa-roast.exe"
 SectionEnd
 
 Section "Microsoft Visual C++ Redistributable Package (x64)" SEC02
@@ -275,8 +275,8 @@ SectionEnd
 Section -AdditionalIcons
   SetShellVarContext all
   WriteIniStr "$INSTDIR\${PRODUCT_NAME}.url" "InternetShortcut" "URL" "${PRODUCT_WEB_SITE}"
-  CreateShortCut "$SMPROGRAMS\Artisan\Website.lnk" "$INSTDIR\${PRODUCT_NAME}.url"
-  CreateShortCut "$SMPROGRAMS\Artisan\Uninstall.lnk" "$INSTDIR\uninst.exe"
+  CreateShortCut "$SMPROGRAMS\Zabawa Roast\Website.lnk" "$INSTDIR\${PRODUCT_NAME}.url"
+  CreateShortCut "$SMPROGRAMS\Zabawa Roast\Uninstall.lnk" "$INSTDIR\uninst.exe"
 SectionEnd
 
 Section -Post
@@ -287,36 +287,36 @@ Section -Post
     WriteUninstaller "$INSTDIR\uninst.exe"
   !endif
 
-  WriteRegStr HKLM "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\artisan.exe"
+  WriteRegStr HKLM "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\zabawa-roast.exe"
   WriteRegStr HKLM "${PRODUCT_DIR_REGKEY}" "Path" "$INSTDIR"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayName" "$(^Name)"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "UninstallString" "$INSTDIR\uninst.exe"
-  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\artisan.exe"
+  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\zabawa-roast.exe"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}.${PRODUCT_BUILD}"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "URLInfoAbout" "${PRODUCT_WEB_SITE}"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
 
   ; file associations
-  !insertmacro APP_ASSOCIATE "alog" "Artisan.Profile" "Artisan Roast Profile" \
-     "$INSTDIR\artisanProfile.ico" "Open with Artisan" "$INSTDIR\artisan.exe $\"%1$\""
+  !insertmacro APP_ASSOCIATE "alog" "ZabawaRoast.Profile" "Zabawa Roast Profile" \
+     "$INSTDIR\artisanProfile.ico" "Open with Zabawa Roast" "$INSTDIR\zabawa-roast.exe $\"%1$\""
 
-  !insertmacro APP_ASSOCIATE "alrm" "Artisan.Alarms" "Artisan Alarms" \
-     "$INSTDIR\artisanAlarms.ico" "Open with Artisan" "$INSTDIR\artisan.exe $\"%1$\""
+  !insertmacro APP_ASSOCIATE "alrm" "ZabawaRoast.Alarms" "Zabawa Roast Alarms" \
+     "$INSTDIR\artisanAlarms.ico" "Open with Zabawa Roast" "$INSTDIR\zabawa-roast.exe $\"%1$\""
 
-  !insertmacro APP_ASSOCIATE "apal" "Artisan.Palettes" "Artisan Palettes" \
-     "$INSTDIR\artisanPalettes.ico" "Open with Artisan" "$INSTDIR\artisan.exe $\"%1$\""
+  !insertmacro APP_ASSOCIATE "apal" "ZabawaRoast.Palettes" "Zabawa Roast Palettes" \
+     "$INSTDIR\artisanPalettes.ico" "Open with Zabawa Roast" "$INSTDIR\zabawa-roast.exe $\"%1$\""
 
-  !insertmacro APP_ASSOCIATE "athm" "Artisan.Theme" "Artisan Theme" \
-     "$INSTDIR\artisanTheme.ico" "Open with Artisan" "$INSTDIR\artisan.exe $\"%1$\""
+  !insertmacro APP_ASSOCIATE "athm" "ZabawaRoast.Theme" "Zabawa Roast Theme" \
+     "$INSTDIR\artisanTheme.ico" "Open with Zabawa Roast" "$INSTDIR\zabawa-roast.exe $\"%1$\""
 
-  !insertmacro APP_ASSOCIATE "aset" "Artisan.Settings" "Artisan Settings" \
-     "$INSTDIR\artisanSettings.ico" "Open with Artisan" "$INSTDIR\artisan.exe $\"%1$\""
+  !insertmacro APP_ASSOCIATE "aset" "ZabawaRoast.Settings" "Zabawa Roast Settings" \
+     "$INSTDIR\artisanSettings.ico" "Open with Zabawa Roast" "$INSTDIR\zabawa-roast.exe $\"%1$\""
 
-  !insertmacro APP_ASSOCIATE "wg" "Artisan.Wheel" "Artisan Wheel" \
-     "$INSTDIR\artisanWheel.ico" "Open with Artisan" "$INSTDIR\artisan.exe $\"%1$\""
+  !insertmacro APP_ASSOCIATE "wg" "ZabawaRoast.Wheel" "Zabawa Roast Wheel" \
+     "$INSTDIR\artisanWheel.ico" "Open with Zabawa Roast" "$INSTDIR\zabawa-roast.exe $\"%1$\""
 
-  !insertmacro APP_ASSOCIATE_URL "artisan" "URL:artisan Protocol" \
-     "Open with URL" "$INSTDIR\artisan.exe $\"%1$\""
+  !insertmacro APP_ASSOCIATE_URL "zabawa-roast" "URL:zabawa-roast Protocol" \
+     "Open with URL" "$INSTDIR\zabawa-roast.exe $\"%1$\""
 
 SectionEnd
 
@@ -340,8 +340,8 @@ FunctionEnd
 Section Uninstall
   Delete "$INSTDIR\${PRODUCT_NAME}.url"
   Delete "$INSTDIR\uninst.exe"
-  Delete "$INSTDIR\artisan.exe"
-  Delete "$INSTDIR\artisan.exe.manifest"
+  Delete "$INSTDIR\zabawa-roast.exe"
+  Delete "$INSTDIR\zabawa-roast.exe.manifest"
   Delete "$INSTDIR\*.pyd"
   Delete "$INSTDIR\*.dll"
   Delete "$INSTDIR\base_library.zip"
@@ -413,7 +413,7 @@ Section Uninstall
   !insertmacro Rmdir_Wildcard "$INSTDIR\zope.event*.dist-info" ${__LINE__}
   !insertmacro Rmdir_Wildcard "$INSTDIR\zope.interface*.dist-info" ${__LINE__}
 
-  Delete "$INSTDIR\artisan.png"
+  Delete "$INSTDIR\zabawa-roast.png"
   Delete "$INSTDIR\LICENSE.txt"
   Delete "$INSTDIR\README.txt"
   Delete "$INSTDIR\artisanAlarms.ico"
@@ -450,7 +450,7 @@ Section Uninstall
   Delete "$INSTDIR\mstile-150x150.png"
   Delete "$INSTDIR\safari-pinned-tab.svg"
   Delete "$INSTDIR\site.webmanifest"
-  Delete "$INSTDIR\artisan.tpl"
+  Delete "$INSTDIR\zabawa-roast.tpl"
   Delete "$INSTDIR\scale_widget.tpl"
   Delete "$INSTDIR\fitty_patched.js"
   Delete "$INSTDIR\bigtext.js"
@@ -462,35 +462,35 @@ Section Uninstall
   Delete "$INSTDIR\qt.conf"
   Delete "$INSTDIR\vc_redist.x64.exe"
   Delete "$INSTDIR\logging.yaml"
-  Delete "$INSTDIR\artisan_public_key.pem dist"
+  Delete "$INSTDIR\artisan_public_key.pem"
 
   SetShellVarContext all
-  Delete "$SMPROGRAMS\Artisan\Uninstall.lnk"
-  Delete "$SMPROGRAMS\Artisan\Website.lnk"
-  Delete "$DESKTOP\Artisan.lnk"
-  Delete "$SMPROGRAMS\Artisan\Artisan.lnk"
+  Delete "$SMPROGRAMS\Zabawa Roast\Uninstall.lnk"
+  Delete "$SMPROGRAMS\Zabawa Roast\Website.lnk"
+  Delete "$DESKTOP\Zabawa Roast.lnk"
+  Delete "$SMPROGRAMS\Zabawa Roast\Zabawa Roast.lnk"
 
-  RMDir "$SMPROGRAMS\Artisan"
+  RMDir "$SMPROGRAMS\Zabawa Roast"
   RMDir "$INSTDIR"
 
   DeleteRegKey ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
   DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
   DeleteRegKey HKCR ".alog"
-  DeleteRegKey HKCR "Artisan.Profile\DefaultIcon"
-  DeleteRegKey HKCR "Artisan.Profile\shell"
-  DeleteRegKey HKCR "Artisan.Profile\shell\open\command"
-  DeleteRegKey HKCR "Artisan.Profile"
+  DeleteRegKey HKCR "ZabawaRoast.Profile\DefaultIcon"
+  DeleteRegKey HKCR "ZabawaRoast.Profile\shell"
+  DeleteRegKey HKCR "ZabawaRoast.Profile\shell\open\command"
+  DeleteRegKey HKCR "ZabawaRoast.Profile"
 
-  !insertmacro APP_UNASSOCIATE "alog" "Artisan.Profile"
-  !insertmacro APP_UNASSOCIATE "alrm" "Artisan.Alarms"
-  !insertmacro APP_UNASSOCIATE "apal" "Artisan.Palettes"
-  !insertmacro APP_UNASSOCIATE "athm" "Artisan.Theme"
-  !insertmacro APP_UNASSOCIATE "aset" "Artisan.Settings"
-  !insertmacro APP_UNASSOCIATE "wg" "Artisan.Wheel"
+  !insertmacro APP_UNASSOCIATE "alog" "ZabawaRoast.Profile"
+  !insertmacro APP_UNASSOCIATE "alrm" "ZabawaRoast.Alarms"
+  !insertmacro APP_UNASSOCIATE "apal" "ZabawaRoast.Palettes"
+  !insertmacro APP_UNASSOCIATE "athm" "ZabawaRoast.Theme"
+  !insertmacro APP_UNASSOCIATE "aset" "ZabawaRoast.Settings"
+  !insertmacro APP_UNASSOCIATE "wg" "ZabawaRoast.Wheel"
 
-  DeleteRegKey HKCR "artisan\shell"
-  DeleteRegKey HKCR "artisan\shell\open\command"
-  DeleteRegKey HKCR "artisan"
+  DeleteRegKey HKCR "zabawa-roast\shell"
+  DeleteRegKey HKCR "zabawa-roast\shell\open\command"
+  DeleteRegKey HKCR "zabawa-roast"
 
   SetAutoClose true
 SectionEnd
