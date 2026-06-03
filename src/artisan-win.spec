@@ -100,7 +100,7 @@ else:
     logging.error(msg)
     sys.exit('Fatal Error')
 
-NAME = 'artisan'
+NAME = 'zabawa-roast'
 TARGET = 'dist\\' + NAME + '\\'
 PYTHON_PACKAGES = PYTHON + r'\Lib\site-packages'
 PYQT_QT = PYTHON_PACKAGES + r'\PyQt' + PYQT + r'\Qt'

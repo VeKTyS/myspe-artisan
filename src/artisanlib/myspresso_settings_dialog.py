@@ -71,9 +71,7 @@ class MyspressoSettingsDialog(QDialog):
         self._api_edit = QLineEdit(
             self._settings.value('cloud/api_base_url', '', type=str)
         )
-        self._api_edit.setPlaceholderText(
-            'https://eedquprtdxpfbtkppqio.supabase.co/functions/v1/artisan-api'
-        )
+        self._api_edit.setPlaceholderText('')
 
         self._web_edit = QLineEdit(
             self._settings.value('cloud/web_base_url', '', type=str)

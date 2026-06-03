@@ -703,7 +703,7 @@ else:
 if platform.system().startswith('Windows'):
     # on Windows we use the Fusion style per default which supports the dark mode
     app.setStyle('Fusion')
-    app.setWindowIcon(QIcon(os.path.join(getAppPath(),'artisan.png')))
+    app.setWindowIcon(QIcon(os.path.join(getAppPath(),'zabawa-roast.png')))
 
 from artisanlib.s7port import s7port
 from artisanlib.wsport import wsport
@@ -1290,26 +1290,7 @@ class VMToolbar(NavigationToolbar): # pylint: disable=abstract-method
                 # n days left <= red if <=3
                 #  3 days, 2 days, 1 day, 0 days left
                 #
-# no links in macOS style boxes
-#                subscription_message_box = ArtisanMessageBox(self.aw, QApplication.translate('Message', 'Subscription'), message)
-                subscription_message_box = QMessageBox() # only without super this one shows the native dialog on macOS under Qt 6.6.2
-#                subscription_message_box.setTextFormat(Qt.TextFormat.RichText)
-                plus.util.setPlusIcon(subscription_message_box)
-                if percent_used_formatted != '':
-                    percent_used_formatted = '\n' + percent_used_formatted
-                subscription_message_box.setText(QApplication.translate('Plus','Do you want to extend your subscription?'))
-                subscription_message_box.setInformativeText((QApplication.translate('Plus','Your subscription ends on') if remaining_days>0 else QApplication.translate('Plus','Your subscription ended on')) + f' {QDate(pu.year,pu.month,pu.day).toString(QLocale().dateFormat(QLocale.FormatType.ShortFormat))}\n{days}{percent_used_formatted}')
-                subscription_message_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                res = subscription_message_box.exec()
-                plus_link = plus.config.shop_base_url
-                if self.aw.plus_subscription == 'PRO':
-                    plus_link += '/professional-roasters'
-                elif self.aw.plus_subscription == 'HOME':
-                    plus_link += '/home-roasters'
-                if res == QMessageBox.StandardButton.Yes:
-                    QDesktopServices.openUrl(QUrl(plus_link, QUrl.ParsingMode.TolerantMode)) # zuban:ignore[unreachable]
-#                box = QMessageBox(self)
-#                box.about(self.aw, QApplication.translate('Message', 'Subscription'),message)
+# MySpresso fork: subscription popup suppressed
             except Exception as e: # pylint: disable=broad-except
                 _log.exception(e)
 
@@ -5306,37 +5287,7 @@ class ApplicationWindow(QMainWindow):
 
     @pyqtSlot()
     def donate(self) -> None:
-        try:
-            everytime = 4*30*24*60*60 # 4 month in seconds
-            everystarts = 30 # number of recordings
-            starts = None
-            lastdonationpopup = None
-            settings = QSettings()
-            if settings.contains('starts'):
-                starts = toInt(settings.value('starts'))
-            if settings.contains('lastdonationpopup'):
-                lastdonationpopup = toInt(settings.value('lastdonationpopup'))
-            now = int(libtime.time())
-            if not(settings.status() == QSettings.Status.NoError and
-                    lastdonationpopup is not None and
-                    starts is not None and
-                    (now >= lastdonationpopup > now-everytime) and
-                    0 <= starts < everystarts):
-#                message = QApplication.translate('Message', 'Artisan is free to use!<br><br>To keep it free and current please support us<br><br><a href="{0}">{0}</a><br><br>and book<br><br><a href="{1}">{1}</a><br><br>to suppress this dialog')
-#                message = message.format('https://artisan-scope.org/donate/', 'https://artisan.plus')
-                message = QApplication.translate('Message', 'Artisan is free to use!\n\nTo keep it free and current please support us with your donation and subscribe to MySpresso to suppress this dialog!')
-                donate_message_box = QMessageBox()
-                donate_message_box.setText(message)
-                donate_message_box.setIcon(QMessageBox.Icon.Information)
-                donate_message_box.setModal(True)
-                donate_message_box.setStandardButtons(QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Ok)
-                donate_message_box.setDefaultButton(QMessageBox.StandardButton.Ok)
-                res = donate_message_box.exec()
-                if res == QMessageBox.StandardButton.Ok:
-                    QDesktopServices.openUrl(QUrl('https://artisan-scope.org/donate/', QUrl.ParsingMode.TolerantMode)) # zuban:ignore[unreachable]
-                self.resetDonateCounter()
-        except Exception as e: # pylint: disable=broad-except
-            _log.exception(e)
+        pass  # MySpresso fork: donation popup suppressed
 
     @pyqtSlot(str)
     def setCanvasColor(self, c:str) -> None: # pylint: disable=no-self-use # used as slot
