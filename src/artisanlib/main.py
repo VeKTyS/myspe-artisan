@@ -24885,7 +24885,7 @@ class ApplicationWindow(QMainWindow):
     @pyqtSlot()
     @pyqtSlot(bool)
     def checkUpdate(self, _:bool = False) -> None:
-        update_url = '<a href="https://artisan-scope.org">https://artisan-scope.org</a>'
+        update_url = '<a href="https://myspresso.com">https://myspresso.com</a>'
         update_str = QApplication.translate('About', 'There was a problem retrieving the latest version information.  Please check your Internet connection, try again later, or check manually.')
         import json
         import json.decoder
@@ -24901,9 +24901,9 @@ class ApplicationWindow(QMainWindow):
                         latest = match.group(0)
                         if latest > __version__:
                             update_str = QApplication.translate('About', 'A new release is available.')
-                            update_str += '<br/><a href="https://github.com/artisan-roaster-scope/artisan/blob/master/wiki/ReleaseHistory.md">'
+                            update_str += '<br/><a href="https://github.com/VeKTyS/myspe-artisan/releases">'
                             update_str +=  QApplication.translate('About', 'Show Change list')
-                            update_str += '<br/><a href="https://github.com/artisan-roaster-scope/artisan/releases/tag/' + str(tag_name) + '">'
+                            update_str += '<br/><a href="https://github.com/VeKTyS/myspe-artisan/releases/tag/' + str(tag_name) + '">'
                             update_str +=  QApplication.translate('About', 'Download Release') + ' ' + str(tag_name)
                         elif latest == __version__ :
                             update_str = QApplication.translate('About', 'You are using the latest release.')
@@ -28183,7 +28183,7 @@ def excepthook(excType:type, excValue:BaseException, tracebackobj:'TracebackType
 #    logFile = 'simple.log'
     notice = \
         """An unhandled exception occurred. Please report the problem on Github:<br>"""\
-        """<a href='https://github.com/artisan-roaster-scope/artisan/issues'>https://github.com/artisan-roaster-scope/artisan/issues</a><br><br>"""\
+        """<a href='https://github.com/VeKTyS/myspe-artisan/issues'>https://github.com/VeKTyS/myspe-artisan/issues</a><br><br>"""\
         """When reporting this issue, please include your settings file (export <br>"""\
         """via menu Help >> Save Settings) and the details below.<br><br>"""\
         """An entry has been written to the error log (menu Help >> Error).<br><br>"""
