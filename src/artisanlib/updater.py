@@ -7,7 +7,15 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
+
+# Windows-specific constants
+if sys.platform == 'win32':
+    DETACHED_PROCESS = 0x00000008
+    CREATE_NEW_PROCESS_GROUP = 0x00000200
+else:
+    DETACHED_PROCESS = 0
+    CREATE_NEW_PROCESS_GROUP = 0
 
 import requests
 from PyQt6.QtCore import QSettings, QThread, QTimer, pyqtSignal
@@ -98,11 +106,168 @@ class UpdateBanner(QFrame):
     def __init__(self, version: str, asset_url: str, asset_name: str,
                  asset_size: int = 0, parent=None) -> None:
         super().__init__(parent)
-        pass  # TODO
+        self._version = version
+        self._asset_url = asset_url
+        self._asset_name = asset_name
+        self._asset_size = asset_size
+        self._downloader: UpdateDownloader | None = None
+
+        self.setFixedHeight(44)
+        self.setObjectName('UpdateBanner')
+        self.setStyleSheet(
+            'QFrame#UpdateBanner {'
+            '  background: #0F1932;'
+            '  border-bottom: 1px solid #A8392E;'
+            '}'
+        )
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 0, 8, 0)
+        layout.setSpacing(12)
+
+        self._label = QLabel(f'Zabawa Roast {version} est disponible')
+        self._label.setStyleSheet(
+            'color: #F5F1E8; font-family: Montserrat, sans-serif; font-size: 12px;'
+        )
+
+        self._progress = QProgressBar()
+        self._progress.setRange(0, 100)
+        self._progress.setFixedWidth(160)
+        self._progress.setFixedHeight(16)
+        self._progress.hide()
+
+        self._update_btn = QPushButton('Mettre à jour')
+        self._update_btn.setFixedHeight(28)
+        self._update_btn.setStyleSheet(
+            'QPushButton {'
+            '  background: #A8392E; color: white; border: none;'
+            '  border-radius: 4px; padding: 0 12px;'
+            '  font-family: Montserrat, sans-serif; font-size: 11px; font-weight: 600;'
+            '}'
+            'QPushButton:hover { background: #C44236; }'
+        )
+        self._update_btn.clicked.connect(self._start_download)
+
+        self._dismiss_btn = QPushButton('✕')
+        self._dismiss_btn.setFixedSize(24, 24)
+        self._dismiss_btn.setStyleSheet(
+            'QPushButton { color: #7A8499; background: transparent; border: none; font-size: 13px; }'
+            'QPushButton:hover { color: #F5F1E8; }'
+        )
+        self._dismiss_btn.clicked.connect(self._dismiss)
+
+        layout.addWidget(self._label)
+        layout.addStretch()
+        layout.addWidget(self._progress)
+        layout.addWidget(self._update_btn)
+        layout.addWidget(self._dismiss_btn)
+
+    def _start_download(self) -> None:
+        from PyQt6.QtCore import QDir
+        self._update_btn.hide()
+        self._progress.show()
+        self._label.setText('Téléchargement en cours...')
+        self._dismiss_btn.setEnabled(False)
+
+        self._downloader = UpdateDownloader(
+            self._asset_url,
+            QDir.tempPath(),
+            self._asset_size,
+        )
+        self._downloader.progress.connect(self._progress.setValue)
+        self._downloader.finished.connect(self._on_download_finished)
+        self._downloader.error.connect(self._on_download_error)
+        self._downloader.start()
+
+    def _on_download_finished(self, path: str) -> None:
+        self._label.setText('Installation en cours, fermeture…')
+        self._progress.hide()
+        QTimer.singleShot(800, lambda: run_updater_and_quit(path))
+
+    def _on_download_error(self, msg: str) -> None:
+        self._label.setText('Échec du téléchargement.')
+        self._progress.hide()
+        open_btn = QPushButton('Ouvrir le dossier')
+        open_btn.setFixedHeight(28)
+        open_btn.setStyleSheet(self._update_btn.styleSheet())
+        # _downloader is always set before this slot can fire
+        fallback_path = os.path.join(self._downloader._dest_dir, self._asset_name)  # type: ignore[union-attr]
+        open_btn.clicked.connect(lambda: _open_folder_fallback(fallback_path))
+        cast_layout = self.layout()
+        if cast_layout is not None:
+            cast_layout.insertWidget(2, open_btn)
+        self._dismiss_btn.setEnabled(True)
+
+    def _dismiss(self) -> None:
+        settings = QSettings()
+        settings.setValue('updater/skipped_version', self._version)
+        self.hide()
+        self.deleteLater()
 
 
 def run_updater_and_quit(asset_path: str) -> None:
-    pass  # TODO
+    pid = os.getpid()
+
+    if sys.platform == 'darwin':
+        exe = Path(sys.executable)
+        # Inside a .app bundle: <bundle>.app/Contents/MacOS/<binary>
+        app_bundle = exe.parent.parent.parent
+        if not str(app_bundle).endswith('.app'):
+            _open_folder_fallback(asset_path)
+            return
+        app_dir = str(app_bundle.parent)
+        app_name = app_bundle.name  # e.g. "Zabawa Roast.app"
+
+        script_path = os.path.join(tempfile.gettempdir(), f'zr_updater_{pid}.sh')
+        script = (
+            '#!/bin/bash\n'
+            'sleep 2\n'
+            f'hdiutil attach -nobrowse -quiet "{asset_path}"'
+            f' -mountpoint /tmp/zr_update_{pid}\n'
+            f'rsync -a --delete "/tmp/zr_update_{pid}/"*.app "{app_dir}/"\n'
+            f'hdiutil detach /tmp/zr_update_{pid} -quiet\n'
+            f'open "{app_dir}/{app_name}"\n'
+            'rm -- "$0"\n'
+        )
+        with open(script_path, 'w') as f:
+            f.write(script)
+        os.chmod(script_path, stat.S_IRWXU)
+        try:
+            subprocess.Popen(
+                ['/bin/bash', script_path],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            _open_folder_fallback(asset_path)
+            return
+
+    elif sys.platform == 'win32':
+        exe = Path(sys.executable)
+        app_exe = str(exe) if exe.suffix == '.exe' else str(exe.parent / 'Zabawa Roast.exe')
+
+        script_path = os.path.join(tempfile.gettempdir(), f'zr_updater_{pid}.bat')
+        script = (
+            '@echo off\n'
+            'timeout /t 2 /nobreak >nul\n'
+            f'"{asset_path}" /S\n'
+            f'start "" "{app_exe}"\n'
+            'del "%~f0"\n'
+        )
+        with open(script_path, 'w') as f:
+            f.write(script)
+        try:
+            subprocess.Popen(
+                ['cmd.exe', '/c', script_path],
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                close_fds=True,
+            )
+        except OSError:
+            _open_folder_fallback(asset_path)
+            return
+
+    QApplication.instance().quit()
 
 
 def _open_folder_fallback(path: str) -> None:
