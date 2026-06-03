@@ -1544,7 +1544,8 @@ class ApplicationWindow(QMainWindow):
         'helpAboutAction', 'checkUpdateAction', 'errorAction', 'messageAction', 'serialAction', 'platformAction', 'aboutQtAction',
         'helpDocumentationAction', 'KshortCAction', 'profile_data_type_adapter', 'official_build',
         'myspressoSettingsAction', 'pushRoastToMyspressoAction',
-        'myspresso_header', 'myspresso_hero', 'myspresso_eventlog', 'myspresso_stats' ]
+        'myspresso_header', 'myspresso_hero', 'myspresso_eventlog', 'myspresso_stats',
+        'update_checker' ]
 
     nLCDS: Final[int] = 10 # maximum number of LCDs and extra devices (2x10 => 20 in total!)
 
@@ -1555,6 +1556,8 @@ class ApplicationWindow(QMainWindow):
                 # filled on app start by calling self.saveAllSettings(QSettings(), self.defaultSettings) before self.settingsLoad()
 
         self.locale_str:str = locale
+        from artisanlib.updater import UpdateChecker as _UpdateChecker
+        self.update_checker: _UpdateChecker | None = None
         self.app:Artisan = app
         self.official_build:bool = appFrozen() and __signature__ != '' and self.app_signature_valid() # type:ignore[reportUnnecessaryComparison,unused-ignore]
         self.superusermode:bool = False
@@ -4015,7 +4018,9 @@ class ApplicationWindow(QMainWindow):
         self.extrabuttondialogs.setLayout(self.extrabuttonsLayout)
         self.extrabuttondialogs.setVisible(False)
 
-        midleftlayout = QVBoxLayout()
+        midleft_widget = QWidget()
+        midleft_widget.setContentsMargins(0, 0, 0, 0)
+        midleftlayout = QVBoxLayout(midleft_widget)
         midleftlayout.setSpacing(0)
         midleftlayout.setContentsMargins(0,0,0,0)
         midleftlayout.addWidget(self.messagelabel)
@@ -4220,13 +4225,14 @@ class ApplicationWindow(QMainWindow):
         self.lcdFrame.setContentsMargins(0,0,0,0)
         self.lcdFrame.setSizePolicy(QSizePolicy.Policy.Maximum,QSizePolicy.Policy.Expanding) # prevent horizontal expansion (graph might not maximize otherwise)
 
-        self.midlayout:QHBoxLayout = QHBoxLayout()
-#        self.midlayout.addWidget(self.sliderFrame)
-#        self.midlayout.addWidget(self.sliderDock)
-        self.midlayout.addLayout(midleftlayout)
-        self.midlayout.addWidget(self.lcdFrame)
-        self.midlayout.setSpacing(0)
-        self.midlayout.setContentsMargins(0,0,0,0)
+        # MySpresso fork: horizontal splitter so graph area and LCD panel
+        # are both user-resizable. midleft_widget wraps midleftlayout.
+        self.mys_h_splitter: Splitter = Splitter(Qt.Orientation.Horizontal)
+        self.mys_h_splitter.setChildrenCollapsible(False)
+        self.mys_h_splitter.setContentsMargins(0, 0, 0, 0)
+        self.mys_h_splitter.addWidget(midleft_widget)
+        self.mys_h_splitter.addWidget(self.lcdFrame)
+        self.mys_h_splitter.setSizes([9999, 0])  # lcdFrame hidden by default
 
         # MySpresso fork: top header strip + hero panel. Both additive —
         # do not touch level1frame / midlayout below.
@@ -4256,18 +4262,44 @@ class ApplicationWindow(QMainWindow):
             self.myspresso_stats = None  # type: ignore[assignment]
 
         mainlayout:QVBoxLayout = QVBoxLayout(self.main_widget)
+        mainlayout.setContentsMargins(0, 0, 0, 0)
+        mainlayout.setSpacing(0)
+
         if self.myspresso_header is not None:
             mainlayout.addWidget(self.myspresso_header)
-        if self.myspresso_hero is not None:
-            mainlayout.addWidget(self.myspresso_hero)
         mainlayout.addWidget(self.level1frame)
-        mainlayout.addLayout(self.midlayout)
-        if self.myspresso_stats is not None:
-            mainlayout.addWidget(self.myspresso_stats)
-        if self.myspresso_eventlog is not None:
-            mainlayout.addWidget(self.myspresso_eventlog)
-        mainlayout.setContentsMargins(0,0,0,0)
-        mainlayout.setSpacing(0)
+
+        # MySpresso fork: vertical splitter — hero | graph area | event log.
+        # All three zones are user-resizable via drag handles.
+        self.mys_v_splitter: Splitter = Splitter(Qt.Orientation.Vertical)
+        self.mys_v_splitter.setChildrenCollapsible(False)
+        self.mys_v_splitter.setContentsMargins(0, 0, 0, 0)
+        _mys_v_sizes: list[int] = []
+
+        if self.myspresso_hero is not None:
+            self.myspresso_hero.setMinimumHeight(40)
+            self.mys_v_splitter.addWidget(self.myspresso_hero)
+            _mys_v_sizes.append(80)
+
+        self.mys_v_splitter.addWidget(self.mys_h_splitter)
+        _mys_v_sizes.append(9999)
+
+        if self.myspresso_stats is not None or self.myspresso_eventlog is not None:
+            _mys_bottom = QWidget()
+            _mys_bottom.setContentsMargins(0, 0, 0, 0)
+            _mys_bottom_layout = QVBoxLayout(_mys_bottom)
+            _mys_bottom_layout.setContentsMargins(0, 0, 0, 0)
+            _mys_bottom_layout.setSpacing(0)
+            if self.myspresso_stats is not None:
+                _mys_bottom_layout.addWidget(self.myspresso_stats)
+            if self.myspresso_eventlog is not None:
+                _mys_bottom_layout.addWidget(self.myspresso_eventlog, 1)
+            _mys_bottom.setMinimumHeight(40)
+            self.mys_v_splitter.addWidget(_mys_bottom)
+            _mys_v_sizes.append(120)
+
+        self.mys_v_splitter.setSizes(_mys_v_sizes)
+        mainlayout.addWidget(self.mys_v_splitter, 1)
 
         # MySpresso fork: wire AFTER both the action buttons exist in
         # level1layout AND the MySpresso widgets have been constructed.
@@ -4403,6 +4435,8 @@ class ApplicationWindow(QMainWindow):
         QTimer.singleShot(0, self.logStartupTime)
         QTimer.singleShot(500, self.updateBadge)
 
+        QTimer.singleShot(5000, self._start_update_check)
+
         self.zoomInShortcut = QShortcut(QKeySequence.StandardKey.ZoomIn, self)
         self.zoomInShortcut.activated.connect(self.zoomIn)
         self.zoomOutShortcut = QShortcut(QKeySequence.StandardKey.ZoomOut, self)
@@ -4414,6 +4448,20 @@ class ApplicationWindow(QMainWindow):
         from artisanlib.myspresso_settings_dialog import MyspressoSettingsDialog
         dlg = MyspressoSettingsDialog(self)
         dlg.exec()
+
+    def _start_update_check(self) -> None:
+        from artisanlib.updater import UpdateChecker
+        self.update_checker = UpdateChecker()
+        self.update_checker.update_available.connect(self._show_update_banner)
+        self.update_checker.start()
+
+    def _show_update_banner(self, version: str, url: str, name: str, size: int) -> None:
+        from artisanlib.updater import UpdateBanner
+        banner = UpdateBanner(version, url, name, size, self.main_widget)
+        layout = self.main_widget.layout()
+        if layout is not None:
+            insert_pos = 1 if self.myspresso_header is not None else 0
+            layout.insertWidget(insert_pos, banner)
 
     # MySpresso fork: force-push the current roast, bypassing the upstream
     # CHARGE+DROP requirement enforced in roast_properties.py / canvas.py
@@ -18214,7 +18262,7 @@ class ApplicationWindow(QMainWindow):
                 'BackgroundGeometry','ScheduleGeometry','ScheduleRemainingSplitter', 'ScheduleMainSplitter', 'ScheduleCompletedSplitter', 'LCDGeometry','DeltaLCDGeometry','ExtraLCDGeometry','PhasesLCDGeometry','AlarmsGeometry',
                 'DeviceAssignmentGeometry','PortsGeometry','TransformatorPosition', 'CurvesPosition', 'StatisticsPosition',
                 'AxisPosition','PhasesPosition', 'BatchPosition', 'SamplingPosition', 'autosaveGeometry', 'PIDPosition',
-                'DesignerPosition','PIDLCDGeometry','ScaleLCDGeometry', 'MainSplitter', 'StatisticsGeometry']:
+                'DesignerPosition','PIDLCDGeometry','ScaleLCDGeometry', 'MainSplitter', 'MySVSplitter', 'MySHSplitter', 'StatisticsGeometry']:
             settings.remove(s)
 
     #loads the settings at the start of application. See the oppposite closeEventSettings()
@@ -18415,6 +18463,10 @@ class ApplicationWindow(QMainWindow):
 
             if settings.contains('MainSplitter') and QApplication.queryKeyboardModifiers() != Qt.KeyboardModifier.AltModifier:
                 self.splitter.restoreState(settings.value('MainSplitter'))
+            if settings.contains('MySVSplitter') and QApplication.queryKeyboardModifiers() != Qt.KeyboardModifier.AltModifier:
+                self.mys_v_splitter.restoreState(settings.value('MySVSplitter'))
+            if settings.contains('MySHSplitter') and QApplication.queryKeyboardModifiers() != Qt.KeyboardModifier.AltModifier:
+                self.mys_h_splitter.restoreState(settings.value('MySHSplitter'))
 
             #restore device
 
@@ -20451,6 +20503,10 @@ class ApplicationWindow(QMainWindow):
 
                 # Saves the current state of this mainwindow's toolbars and dockwidgets
                 self.settingsSetValue(settings, default_settings, 'MainWindowState',self.saveState(), read_defaults)
+                if hasattr(self, 'mys_v_splitter'):
+                    self.settingsSetValue(settings, default_settings, 'MySVSplitter', self.mys_v_splitter.saveState(), read_defaults)
+                if hasattr(self, 'mys_h_splitter'):
+                    self.settingsSetValue(settings, default_settings, 'MySHSplitter', self.mys_h_splitter.saveState(), read_defaults)
 
                 # save screens fingerprint to decide if dialog positions should be remembered on startup
                 if not read_defaults:
@@ -24835,7 +24891,7 @@ class ApplicationWindow(QMainWindow):
         import json.decoder
         try:
             import requests
-            r = requests.get('https://api.github.com/repos/artisan-roaster-scope/artisan/releases/latest', timeout=(2,4))
+            r = requests.get('https://api.github.com/repos/VeKTyS/myspe-artisan/releases/latest', timeout=(2,4))
             if r.status_code != 204 and r.headers['content-type'].strip().startswith('application/json'):
                 response = r.json()
                 if 'tag_name' in response:
