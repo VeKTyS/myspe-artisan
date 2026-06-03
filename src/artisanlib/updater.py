@@ -226,7 +226,7 @@ def run_updater_and_quit(asset_path: str) -> None:
             f' -mountpoint /tmp/zr_update_{pid}\n'
             f'rsync -a --delete "/tmp/zr_update_{pid}/"*.app "{app_dir}/"\n'
             f'hdiutil detach /tmp/zr_update_{pid} -quiet\n'
-            f'open "{app_dir}/{app_name}"\n'
+            f'open "{app_dir}/"*.app\n'
             'rm -- "$0"\n'
         )
         with open(script_path, 'w') as f:
@@ -267,7 +267,9 @@ def run_updater_and_quit(asset_path: str) -> None:
             _open_folder_fallback(asset_path)
             return
 
-    QApplication.instance().quit()
+    app = QApplication.instance()
+    if app is not None:
+        app.quit()
 
 
 def _open_folder_fallback(path: str) -> None:
