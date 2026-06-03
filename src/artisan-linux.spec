@@ -90,7 +90,7 @@ pyz = PYZ(a.pure, a.zipped_data,
 exe = EXE(pyz,
           a.scripts,
           exclude_binaries=True, # should be True for onedir
-          name='artisan',
+          name='zabawa-roast',
           debug=False,
           strip=False, # builds fails to start with strip=True with some "address/offset not page-aligned" (scipy/blas)
           upx=True,
@@ -102,4 +102,4 @@ coll = COLLECT(exe,
                a.datas,
                strip=False, # builds fails to start with strip=True with some "address/offset not page-aligned" (scipy/blas)
                upx=True,
-               name='artisan')
+               name='zabawa-roast')

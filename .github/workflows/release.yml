@@ -242,7 +242,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name || inputs.tag }}
-          name: Artisan MySpresso ${{ github.ref_name || inputs.tag }}
+          name: Zabawa Roast ${{ github.ref_name || inputs.tag }}
           draft: false
           prerelease: false
           generate_release_notes: true

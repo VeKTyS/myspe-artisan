@@ -1,7 +1,7 @@
 [project]
-name = 'Artisan'
+name = 'Zabawa Roast'
 dynamic = ['version']
-description = "Artisan is a software that helps coffee roasters record, analyze, and control roast profiles."
+description = "Zabawa Roast is a software by MySpresso that helps coffee roasters record, analyze, and control roast profiles."
 readme = {file = 'README.txt', content-type='text/markdown'}
 authors = [
     {name = 'Rafael Cobo'},
