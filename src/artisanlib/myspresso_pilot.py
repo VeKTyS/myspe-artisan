@@ -116,8 +116,12 @@ class MySpressoPilotColumn(QFrame):
         ctx.setHorizontalSpacing(10)
         ctx.setVerticalSpacing(4)
         self._meta_store = self._ctx_value()
+        # Long store names wrap onto multiple lines rather than being clipped.
+        self._meta_store.setWordWrap(True)
         self._meta_charge = self._ctx_value()
-        ctx.addWidget(self._ctx_label('MAGASIN'), 0, 0)
+        _store_label = self._ctx_label('MAGASIN')
+        # Keep the label aligned with the first line of a wrapped value.
+        ctx.addWidget(_store_label, 0, 0, Qt.AlignmentFlag.AlignTop)
         ctx.addWidget(self._meta_store, 0, 1)
         ctx.addWidget(self._ctx_label('CHARGE'), 1, 0)
         ctx.addWidget(self._meta_charge, 1, 1)
@@ -278,7 +282,8 @@ class MySpressoPilotColumn(QFrame):
 
         # Context footer
         store = _safe(lambda: qmc.plus_store_label or qmc.plus_store or '', '') or '—'
-        self._meta_store.setText(str(store)[:18])
+        # Full name — the label wraps (setWordWrap) instead of clipping.
+        self._meta_store.setText(str(store))
 
         weight = _safe(lambda: qmc.weight, [0, 0, 'kg'])
         if weight and weight[0]:
