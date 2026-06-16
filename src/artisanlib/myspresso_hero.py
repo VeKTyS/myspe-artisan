@@ -66,9 +66,8 @@ class MySpressoHeroPanel(QFrame):
         self.setObjectName('MysHero')
         self.setFrameShape(QFrame.Shape.NoFrame)
         # Not fixed: the hero is the top pane of mys_v_splitter and stays
-        # user-resizable (drag the handle to give the chart more room). The
-        # minimum keeps the title/timer readable.
-        self.setMinimumHeight(96)
+        # user-resizable. main.py sets minimumHeight(0) + collapsible so it can
+        # be dragged fully closed to maximise the chart.
 
         # ── Title block (left) ──────────────────────────────────────────────
         title_block = QVBoxLayout()

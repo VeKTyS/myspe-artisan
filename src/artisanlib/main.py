@@ -4306,18 +4306,19 @@ class ApplicationWindow(QMainWindow):
         _mys_v_sizes: list[int] = []
 
         if self.myspresso_hero is not None:
-            # Min keeps title/timer readable; the pane is user-resizable so the
-            # chart can be enlarged by dragging the handle below the hero.
-            self.myspresso_hero.setMinimumHeight(96)
+            # Minimum 0 so the user can drag the profile bar fully closed to
+            # maximise the chart (collapsible set below). Default size 96.
+            self.myspresso_hero.setMinimumHeight(0)
             self.mys_v_splitter.addWidget(self.myspresso_hero)
             _mys_v_sizes.append(96)
 
         # MySpresso fork: phase LCDs (SEC%/»SEC/»d1C) get their OWN resizable
         # pane below the hero — independent of the profile bar. Hidden by
         # default (phasesLCDs.hide()), so the splitter collapses it to 0 until
-        # the user enables Phase LCDs; then it appears with its own drag handle.
+        # the user enables Phase LCDs; then it appears with its own drag handle
+        # and can likewise be dragged closed (min 0 + collapsible).
         self.mys_v_splitter.addWidget(self.phasesLCDs)
-        self.phasesLCDs.setMinimumHeight(56)
+        self.phasesLCDs.setMinimumHeight(0)
         _mys_v_sizes.append(76)
 
         self.mys_v_splitter.addWidget(self.mys_h_splitter)
@@ -4340,6 +4341,17 @@ class ApplicationWindow(QMainWindow):
             # No event log → just show the stats strip.
             self.mys_v_splitter.addWidget(self.myspresso_stats)
             _mys_v_sizes.append(28)
+
+        # MySpresso fork: let the user drag the hero (profile bar) and the
+        # phase-LCDs pane fully closed to maximise the chart, while the chart
+        # pane itself stays protected from collapse.
+        if self.myspresso_hero is not None:
+            self.mys_v_splitter.setCollapsible(0, True)   # hero / profile bar
+            self.mys_v_splitter.setCollapsible(1, True)   # phases pane
+            self.mys_v_splitter.setCollapsible(2, False)  # chart
+        else:
+            self.mys_v_splitter.setCollapsible(0, True)   # phases pane
+            self.mys_v_splitter.setCollapsible(1, False)  # chart
 
         self.mys_v_splitter.setSizes(_mys_v_sizes)
         mainlayout.addWidget(self.mys_v_splitter, 1)
