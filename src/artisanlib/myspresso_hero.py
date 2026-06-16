@@ -145,15 +145,30 @@ class MySpressoHeroPanel(QFrame):
         # Meta panel (MAGASIN / CHARGE / Δ T° / DEV. RATIO) removed: the
         # piloting indicators now live in the right-hand MySpressoPilotColumn.
 
-        # ── Outer layout ────────────────────────────────────────────────────
-        root = QHBoxLayout(self)
-        root.setContentsMargins(20, 10, 20, 10)
-        root.setSpacing(24)
-        root.addWidget(title_w, 3)
-        root.addWidget(timer_w, 4)
+        # ── Top row: title (left) + timer (centre) ──────────────────────────
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(24)
+        top_row.addWidget(title_w, 3)
+        top_row.addWidget(timer_w, 4)
         # Right spacer keeps the timer visually centred now that the meta
         # panel is gone (title block on the left is wider than empty right).
-        root.addStretch(3)
+        top_row.addStretch(3)
+
+        # ── Phase LCDs row (centred, below the title/timer) ─────────────────
+        # The native phasesLCDs widget is reparented here via attach_phases.
+        self._phases_row = QHBoxLayout()
+        self._phases_row.setContentsMargins(0, 0, 0, 0)
+        self._phases_row.setSpacing(0)
+        self._phases_row.addStretch(1)
+        self._phases_row.addStretch(1)  # phases widget inserted at index 1
+
+        # ── Outer layout ────────────────────────────────────────────────────
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 10, 20, 8)
+        root.setSpacing(6)
+        root.addLayout(top_row)
+        root.addLayout(self._phases_row)
 
         # Refresh timer
         self._aw: ApplicationWindow | None = None
@@ -168,6 +183,22 @@ class MySpressoHeroPanel(QFrame):
         self._cursor_last_ms: int = 0
         self._refresh_values()
         self._refresh.start()
+
+    def attach_phases(self, phases_widget: QWidget) -> None:
+        """Reparent the native phase LCDs (SEC%/»SEC/»d1C …) into a centred row
+        below the title/timer. The hero grows only when the LCDs are visible."""
+        self._phases_widget = phases_widget
+        self._phases_row.insertWidget(1, phases_widget)
+        self._sync_phases_height()
+
+    def _sync_phases_height(self) -> None:
+        """Tall hero (room for the enlarged phase LCDs) only while they are
+        visible; compact otherwise so users who don't use phases keep the room."""
+        ph = getattr(self, '_phases_widget', None)
+        shown = ph is not None and ph.isVisible()
+        if shown != getattr(self, '_phases_shown', None):
+            self._phases_shown = shown
+            self.setFixedHeight(150 if shown else 96)
 
     def update_cursor(self, raw_message: str) -> None:
         """Display the matplotlib cursor X (time) in the hero timer.
@@ -212,6 +243,8 @@ class MySpressoHeroPanel(QFrame):
         aw = self._aw
         if aw is None:
             return
+        # Keep hero height in sync with the phase-LCDs visibility toggle.
+        self._sync_phases_height()
         # If the chart cursor is hovering inside the axes, leave the timer /
         # temperature labels alone — update_cursor() owns them. The meta panel
         # (right side) still refreshes from live qmc state below.

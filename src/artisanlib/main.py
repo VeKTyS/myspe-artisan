@@ -3934,11 +3934,17 @@ class ApplicationWindow(QMainWindow):
         phasesLCDlayout.setSpacing(0)
         self.phasesLCDs.setLayout(phasesLCDlayout)
         self.phasesLCDs.hide()
+        # MySpresso fork: larger phase LCDs (relocated, centred under the hero
+        # bar via myspresso_hero.attach_phases).
+        for _plcd in (self.TPlcd, self.DRYlcd, self.FCslcd):
+            _plcd.setMinimumHeight(46)
+            _plcd.setMinimumWidth(108)
         self.phasesLCDs.setToolTip(QApplication.translate('Tooltip','Phase LCDs: right-click to cycle through TIME, PERCENTAGE and TEMP MODE'))
 
         #level 1
         self.level1layout.addStretch()
-        self.level1layout.addWidget(self.phasesLCDs)
+        # MySpresso fork: phasesLCDs relocated under the hero bar, centred
+        # (see myspresso_hero.attach_phases). No longer in the top level1 row.
         self.level1layout.addWidget(self.AUCLCD)
         self.level1layout.addSpacing(20)
         self.level1layout.addWidget(self.buttonRESET)
@@ -4299,7 +4305,7 @@ class ApplicationWindow(QMainWindow):
         if self.myspresso_hero is not None:
             self.myspresso_hero.setMinimumHeight(40)
             self.mys_v_splitter.addWidget(self.myspresso_hero)
-            _mys_v_sizes.append(80)
+            _mys_v_sizes.append(150)
 
         self.mys_v_splitter.addWidget(self.mys_h_splitter)
         _mys_v_sizes.append(9999)
@@ -4336,6 +4342,8 @@ class ApplicationWindow(QMainWindow):
         try:
             if self.myspresso_hero is not None:
                 self.myspresso_hero.wire(self)
+                # MySpresso fork: centre the phase LCDs under the hero bar.
+                self.myspresso_hero.attach_phases(self.phasesLCDs)
         except Exception as _e:  # pylint: disable=broad-except
             _log.exception(_e)
         try:
