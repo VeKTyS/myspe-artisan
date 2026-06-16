@@ -89,14 +89,33 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      # Cache the full Qt SDK (~1 GB). aqtinstall only re-downloads on a cache
+      # miss, which is the single biggest time sink of the Windows build.
+      - name: Cache Qt 6.5.3
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: C:\Qt
+          key: qt-win64-msvc2019_64-6.5.3-v1
+
       - name: Install Qt via aqtinstall
+        if: steps.cache-qt.outputs.cache-hit != 'true'
         run: |
           pip install aqtinstall
           aqt install-qt windows desktop 6.5.3 win64_msvc2019_64 -O C:\Qt
-          echo "QT_PATH=C:\Qt\6.5.3\msvc2019_64" >> $env:GITHUB_ENV
 
-      - name: Install NSIS
-        run: choco install nsis -y
+      - name: Set Qt path
+        run: echo "QT_PATH=C:\Qt\6.5.3\msvc2019_64" >> $env:GITHUB_ENV
+
+      # Portable NSIS from the official zip — much faster than `choco install`
+      # and self-contained (MUI, System/nsExec plugins, x64/WinVer headers).
+      - name: Install NSIS (portable)
+        shell: powershell
+        run: |
+          $url = 'https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10.zip'
+          Invoke-WebRequest -Uri $url -OutFile nsis.zip
+          Expand-Archive -Path nsis.zip -DestinationPath C:\nsis-portable -Force
+          "C:\nsis-portable\nsis-3.10" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Download vc_redist.x64.exe
         shell: powershell
@@ -148,11 +167,7 @@ jobs:
           PRODUCT_VERSION: ${{ steps.version.outputs.version }}
           PRODUCT_BUILD: ${{ steps.version.outputs.build }}
         run: |
-          if exist "%ProgramFiles(x86)%\NSIS\makensis.exe" (
-            "%ProgramFiles(x86)%\NSIS\makensis.exe" /DPRODUCT_VERSION=%PRODUCT_VERSION% /DPRODUCT_BUILD=%PRODUCT_BUILD% setup-install3-pi.nsi
-          ) else (
-            "%ProgramFiles%\NSIS\makensis.exe" /DPRODUCT_VERSION=%PRODUCT_VERSION% /DPRODUCT_BUILD=%PRODUCT_BUILD% setup-install3-pi.nsi
-          )
+          makensis.exe /DPRODUCT_VERSION=%PRODUCT_VERSION% /DPRODUCT_BUILD=%PRODUCT_BUILD% setup-install3-pi.nsi
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
