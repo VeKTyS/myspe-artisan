@@ -4303,7 +4303,9 @@ class ApplicationWindow(QMainWindow):
         _mys_v_sizes: list[int] = []
 
         if self.myspresso_hero is not None:
-            self.myspresso_hero.setMinimumHeight(40)
+            # Min keeps title/timer readable; the pane is user-resizable so the
+            # chart can be enlarged by dragging the handle below the hero.
+            self.myspresso_hero.setMinimumHeight(96)
             self.mys_v_splitter.addWidget(self.myspresso_hero)
             _mys_v_sizes.append(150)
 

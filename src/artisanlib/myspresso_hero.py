@@ -65,7 +65,10 @@ class MySpressoHeroPanel(QFrame):
         super().__init__(parent)
         self.setObjectName('MysHero')
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setFixedHeight(96)
+        # Not fixed: the hero is the top pane of mys_v_splitter and stays
+        # user-resizable (drag the handle to give the chart more room). The
+        # minimum keeps the title/timer readable.
+        self.setMinimumHeight(96)
 
         # ── Title block (left) ──────────────────────────────────────────────
         title_block = QVBoxLayout()
@@ -186,19 +189,11 @@ class MySpressoHeroPanel(QFrame):
 
     def attach_phases(self, phases_widget: QWidget) -> None:
         """Reparent the native phase LCDs (SEC%/»SEC/»d1C …) into a centred row
-        below the title/timer. The hero grows only when the LCDs are visible."""
+        below the title/timer. The hero stays user-resizable via the top
+        splitter handle — we never fix its height, only keep a minimum so the
+        title/timer never clip."""
         self._phases_widget = phases_widget
         self._phases_row.insertWidget(1, phases_widget)
-        self._sync_phases_height()
-
-    def _sync_phases_height(self) -> None:
-        """Tall hero (room for the enlarged phase LCDs) only while they are
-        visible; compact otherwise so users who don't use phases keep the room."""
-        ph = getattr(self, '_phases_widget', None)
-        shown = ph is not None and ph.isVisible()
-        if shown != getattr(self, '_phases_shown', None):
-            self._phases_shown = shown
-            self.setFixedHeight(150 if shown else 96)
 
     def update_cursor(self, raw_message: str) -> None:
         """Display the matplotlib cursor X (time) in the hero timer.
@@ -243,8 +238,6 @@ class MySpressoHeroPanel(QFrame):
         aw = self._aw
         if aw is None:
             return
-        # Keep hero height in sync with the phase-LCDs visibility toggle.
-        self._sync_phases_height()
         # If the chart cursor is hovering inside the axes, leave the timer /
         # temperature labels alone — update_cursor() owns them. The meta panel
         # (right side) still refreshes from live qmc state below.
