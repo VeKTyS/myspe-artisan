@@ -148,30 +148,17 @@ class MySpressoHeroPanel(QFrame):
         # Meta panel (MAGASIN / CHARGE / Δ T° / DEV. RATIO) removed: the
         # piloting indicators now live in the right-hand MySpressoPilotColumn.
 
-        # ── Top row: title (left) + timer (centre) ──────────────────────────
-        top_row = QHBoxLayout()
-        top_row.setContentsMargins(0, 0, 0, 0)
-        top_row.setSpacing(24)
-        top_row.addWidget(title_w, 3)
-        top_row.addWidget(timer_w, 4)
+        # ── Outer layout: title (left) + timer (centre) ─────────────────────
+        # Phase LCDs are NOT here — they live in their own resizable splitter
+        # pane below the hero (independent of this bar).
+        root = QHBoxLayout(self)
+        root.setContentsMargins(20, 10, 20, 10)
+        root.setSpacing(24)
+        root.addWidget(title_w, 3)
+        root.addWidget(timer_w, 4)
         # Right spacer keeps the timer visually centred now that the meta
         # panel is gone (title block on the left is wider than empty right).
-        top_row.addStretch(3)
-
-        # ── Phase LCDs row (centred, below the title/timer) ─────────────────
-        # The native phasesLCDs widget is reparented here via attach_phases.
-        self._phases_row = QHBoxLayout()
-        self._phases_row.setContentsMargins(0, 0, 0, 0)
-        self._phases_row.setSpacing(0)
-        self._phases_row.addStretch(1)
-        self._phases_row.addStretch(1)  # phases widget inserted at index 1
-
-        # ── Outer layout ────────────────────────────────────────────────────
-        root = QVBoxLayout(self)
-        root.setContentsMargins(20, 10, 20, 8)
-        root.setSpacing(6)
-        root.addLayout(top_row)
-        root.addLayout(self._phases_row)
+        root.addStretch(3)
 
         # Refresh timer
         self._aw: ApplicationWindow | None = None
@@ -186,14 +173,6 @@ class MySpressoHeroPanel(QFrame):
         self._cursor_last_ms: int = 0
         self._refresh_values()
         self._refresh.start()
-
-    def attach_phases(self, phases_widget: QWidget) -> None:
-        """Reparent the native phase LCDs (SEC%/»SEC/»d1C …) into a centred row
-        below the title/timer. The hero stays user-resizable via the top
-        splitter handle — we never fix its height, only keep a minimum so the
-        title/timer never clip."""
-        self._phases_widget = phases_widget
-        self._phases_row.insertWidget(1, phases_widget)
 
     def update_cursor(self, raw_message: str) -> None:
         """Display the matplotlib cursor X (time) in the hero timer.

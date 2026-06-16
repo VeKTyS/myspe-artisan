@@ -3925,17 +3925,20 @@ class ApplicationWindow(QMainWindow):
         self.phasesLCDs: QFrame = QFrame()
         self.phasesLCDs.setContentsMargins(0, 0, 0, 0)
         phasesLCDlayout = QHBoxLayout()
+        # MySpresso fork: leading/trailing stretches centre the phase LCDs
+        # horizontally in their own (full-width) resizable splitter pane.
+        phasesLCDlayout.addStretch(1)
         phasesLCDlayout.addWidget(self.TPlcdFrame)
         phasesLCDlayout.addWidget(self.TP2DRYframe)
         phasesLCDlayout.addWidget(self.DRYlcdFrame)
         phasesLCDlayout.addWidget(self.DRY2FCsframe)
         phasesLCDlayout.addWidget(self.FCslcdFrame)
+        phasesLCDlayout.addStretch(1)
         phasesLCDlayout.setContentsMargins(0, 0, 0, 0)
         phasesLCDlayout.setSpacing(0)
         self.phasesLCDs.setLayout(phasesLCDlayout)
         self.phasesLCDs.hide()
-        # MySpresso fork: larger phase LCDs (relocated, centred under the hero
-        # bar via myspresso_hero.attach_phases).
+        # MySpresso fork: larger phase LCDs (own resizable pane below the hero).
         for _plcd in (self.TPlcd, self.DRYlcd, self.FCslcd):
             _plcd.setMinimumHeight(46)
             _plcd.setMinimumWidth(108)
@@ -3943,8 +3946,8 @@ class ApplicationWindow(QMainWindow):
 
         #level 1
         self.level1layout.addStretch()
-        # MySpresso fork: phasesLCDs relocated under the hero bar, centred
-        # (see myspresso_hero.attach_phases). No longer in the top level1 row.
+        # MySpresso fork: phasesLCDs relocated to their own resizable splitter
+        # pane below the hero (added to mys_v_splitter). No longer in level1.
         self.level1layout.addWidget(self.AUCLCD)
         self.level1layout.addSpacing(20)
         self.level1layout.addWidget(self.buttonRESET)
@@ -4307,7 +4310,15 @@ class ApplicationWindow(QMainWindow):
             # chart can be enlarged by dragging the handle below the hero.
             self.myspresso_hero.setMinimumHeight(96)
             self.mys_v_splitter.addWidget(self.myspresso_hero)
-            _mys_v_sizes.append(150)
+            _mys_v_sizes.append(96)
+
+        # MySpresso fork: phase LCDs (SEC%/»SEC/»d1C) get their OWN resizable
+        # pane below the hero — independent of the profile bar. Hidden by
+        # default (phasesLCDs.hide()), so the splitter collapses it to 0 until
+        # the user enables Phase LCDs; then it appears with its own drag handle.
+        self.mys_v_splitter.addWidget(self.phasesLCDs)
+        self.phasesLCDs.setMinimumHeight(56)
+        _mys_v_sizes.append(76)
 
         self.mys_v_splitter.addWidget(self.mys_h_splitter)
         _mys_v_sizes.append(9999)
@@ -4344,8 +4355,6 @@ class ApplicationWindow(QMainWindow):
         try:
             if self.myspresso_hero is not None:
                 self.myspresso_hero.wire(self)
-                # MySpresso fork: centre the phase LCDs under the hero bar.
-                self.myspresso_hero.attach_phases(self.phasesLCDs)
         except Exception as _e:  # pylint: disable=broad-except
             _log.exception(_e)
         try:
