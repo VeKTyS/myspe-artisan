@@ -32,7 +32,6 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QVBoxLayout,
@@ -66,7 +65,7 @@ class MySpressoHeroPanel(QFrame):
         super().__init__(parent)
         self.setObjectName('MysHero')
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setFixedHeight(108)
+        self.setFixedHeight(96)
 
         # ── Title block (left) ──────────────────────────────────────────────
         title_block = QVBoxLayout()
@@ -110,16 +109,19 @@ class MySpressoHeroPanel(QFrame):
         from PyQt6.QtGui import QFont
         f_timer = QFont('JetBrains Mono')
         f_timer.setStyleHint(QFont.StyleHint.Monospace)
-        f_timer.setPixelSize(52)
+        f_timer.setPixelSize(46)
         f_timer.setWeight(QFont.Weight.DemiBold)
         self._timer_label.setFont(f_timer)
         self._timer_label.setStyleSheet('color: #070D1F;')
         self._timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        # Temperature echo under the timer (the authoritative, large readout
+        # lives in the right pilot column; this is a glanceable duplicate next
+        # to the clock so the top bar carries profil + temps + température).
         self._temp_label = QLabel('—.- °F BT')
         f_temp = QFont('JetBrains Mono')
         f_temp.setStyleHint(QFont.StyleHint.Monospace)
-        f_temp.setPixelSize(18)
+        f_temp.setPixelSize(17)
         f_temp.setWeight(QFont.Weight.Medium)
         self._temp_label.setFont(f_temp)
         self._temp_label.setStyleSheet('color: #A8392E;')
@@ -140,51 +142,18 @@ class MySpressoHeroPanel(QFrame):
             ' border-right: 1px solid #E8E3D6; }'
         )
 
-        # ── Meta panel (right) ──────────────────────────────────────────────
-        meta_grid = QGridLayout()
-        meta_grid.setHorizontalSpacing(16)
-        meta_grid.setVerticalSpacing(4)
-
-        def _meta_label(text: str) -> QLabel:
-            lbl = QLabel(text)
-            lbl.setStyleSheet(
-                'font-size: 10px; font-weight: 600; letter-spacing: 0.5px;'
-                ' color: #7A736A;'
-            )
-            return lbl
-
-        def _meta_value() -> QLabel:
-            lbl = QLabel('—')
-            lbl.setStyleSheet(
-                'font-family: "JetBrains Mono"; font-size: 13px; font-weight: 500;'
-                ' color: #070D1F;'
-            )
-            return lbl
-
-        self._meta_store = _meta_value()
-        self._meta_charge = _meta_value()
-        self._meta_dt = _meta_value()
-        self._meta_devratio = _meta_value()
-
-        meta_grid.addWidget(_meta_label('MAGASIN'), 0, 0)
-        meta_grid.addWidget(self._meta_store, 0, 1)
-        meta_grid.addWidget(_meta_label('CHARGE'), 1, 0)
-        meta_grid.addWidget(self._meta_charge, 1, 1)
-        meta_grid.addWidget(_meta_label('Δ T°'), 2, 0)
-        meta_grid.addWidget(self._meta_dt, 2, 1)
-        meta_grid.addWidget(_meta_label('DEV. RATIO'), 3, 0)
-        meta_grid.addWidget(self._meta_devratio, 3, 1)
-
-        meta_w = QWidget()
-        meta_w.setLayout(meta_grid)
+        # Meta panel (MAGASIN / CHARGE / Δ T° / DEV. RATIO) removed: the
+        # piloting indicators now live in the right-hand MySpressoPilotColumn.
 
         # ── Outer layout ────────────────────────────────────────────────────
         root = QHBoxLayout(self)
-        root.setContentsMargins(20, 12, 20, 12)
+        root.setContentsMargins(20, 10, 20, 10)
         root.setSpacing(24)
         root.addWidget(title_w, 3)
-        root.addWidget(timer_w, 2)
-        root.addWidget(meta_w, 2)
+        root.addWidget(timer_w, 4)
+        # Right spacer keeps the timer visually centred now that the meta
+        # panel is gone (title block on the left is wider than empty right).
+        root.addStretch(3)
 
         # Refresh timer
         self._aw: ApplicationWindow | None = None
@@ -201,12 +170,13 @@ class MySpressoHeroPanel(QFrame):
         self._refresh.start()
 
     def update_cursor(self, raw_message: str) -> None:
-        """Display the matplotlib cursor X (time) / Y (temp) in the hero slot.
+        """Display the matplotlib cursor X (time) in the hero timer.
 
         Called from main.py via a wrapper around ``ntb.set_message``. The
         upstream format is ``<PRE>{mode}  {xs}\\n{channel} {ys}°{mode}</PRE>``;
         when the cursor is outside the axes it collapses to just ``<PRE>F</PRE>``
         (mode only) — in that case we drop back to the live recording state.
+        Temperature / RoR under the cursor are shown by the pilot column.
         """
         import re
         # Strip <PRE>/</PRE> wrappers and any other tags matplotlib may add.
@@ -227,19 +197,15 @@ class MySpressoHeroPanel(QFrame):
         # Line 1 — "{mode}  {xs}" (e.g. "F  2:11") or just "{xs}".
         first = lines[0].split()
         time_str = first[-1] if first else '—'
-        # Line 2 — "{channel} {ys}°{mode}" (e.g. "BT 247.8°F").
+        self._timer_label.setText(time_str)
+        # Line 2 — "{channel} {ys}°{mode}" — echo temperature (skip RoR lines).
         second = lines[1]
-        # Find a "°" to split temp from unit; if missing show raw line.
-        if '°' in second:
+        if '°' in second and '/min' not in second:
             head, _, tail = second.rpartition('°')
-            # head ends with the value; tail is the unit (e.g. "F" or "F/min").
             parts = head.split()
             temp_val = parts[-1] if parts else head.strip()
             channel = parts[0] if len(parts) > 1 else 'BT'
             self._temp_label.setText(f'{temp_val} °{tail} {channel}'.strip())
-        else:
-            self._temp_label.setText(second)
-        self._timer_label.setText(time_str)
         self._cursor_active = True
 
     def _refresh_values(self) -> None:
@@ -280,8 +246,7 @@ class MySpressoHeroPanel(QFrame):
         else:
             self._filename.setText('')
 
-        # Timer + temperature (skipped when chart cursor is active)
-        mode = _safe(lambda: qmc.mode, 'F')
+        # Timer (skipped when chart cursor is active — update_cursor owns it)
         if not cursor_active:
             # Use Artisan's authoritative ArtisanTime clock — it advances
             # every frame as long as monitoring is on, even when the user
@@ -302,36 +267,9 @@ class MySpressoHeroPanel(QFrame):
                 pass
             self._timer_label.setText(_fmt_mmss(elapsed))
 
+            mode = _safe(lambda: qmc.mode, 'F')
             temp2 = _safe(lambda: qmc.temp2, [])
             if temp2 and temp2[-1] is not None and temp2[-1] != -1:
                 self._temp_label.setText(f'{temp2[-1]:.1f} °{mode} BT')
             else:
                 self._temp_label.setText(f'—.- °{mode} BT')
-
-        # Meta panel
-        store = _safe(lambda: qmc.plus_store_label or qmc.plus_store or '', '') or '—'
-        self._meta_store.setText(str(store)[:24])
-
-        weight = _safe(lambda: qmc.weight, [0, 0, 'kg'])
-        if weight and weight[0]:
-            unit = weight[2] if len(weight) > 2 else 'kg'
-            self._meta_charge.setText(f'{float(weight[0]):.2f} {unit}')
-        else:
-            self._meta_charge.setText('—')
-
-        # ΔT° — use the latest delta if available
-        delta2 = _safe(lambda: qmc.delta2, [])
-        if delta2 and delta2[-1] is not None:
-            self._meta_dt.setText(f'{delta2[-1]:+.1f} °{mode}/min')
-        else:
-            self._meta_dt.setText(f'— °{mode}/min')
-
-        # DEV ratio — computed end_weight / start_weight loss
-        if weight and weight[0] and weight[1]:
-            try:
-                loss = (float(weight[0]) - float(weight[1])) / float(weight[0]) * 100
-                self._meta_devratio.setText(f'{loss:.1f} %')
-            except Exception:  # noqa: BLE001
-                self._meta_devratio.setText('—')
-        else:
-            self._meta_devratio.setText('—')

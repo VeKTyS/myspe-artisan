@@ -1,10 +1,14 @@
 """
 MySpresso Artisan — bottom event log strip.
 
-Sits below the matplotlib chart. Displays a timestamped list of recent
-events (profile saved, roast synced, drop detected, errors, etc.).
-Read-only mirror of ApplicationWindow.messagehist — no modification of
-the upstream sendmessage flow.
+A thin, always-visible footer bar sits below the matplotlib chart:
+
+    [ ▸ Historique ]   TORRÉFACTION · {date} · {elapsed} · {green} vert        … stats …
+
+The timestamped event list is hidden by default (so the chart grid keeps
+the height) and unfolds above the footer bar when the user clicks the
+``Historique`` toggle. Read-only mirror of ApplicationWindow.messagehist
+— no modification of the upstream sendmessage flow.
 
 Polls messagehist every 500 ms via QTimer. Cheap: messagehist is a
 bounded list (≤ 100 entries upstream), and we only redraw when the
@@ -23,64 +27,33 @@ from PyQt6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow
+    from artisanlib.widgets import Splitter
+
+
+# Splitter heights (px) for the bottom section when the history list is
+# folded (footer bar only) vs unfolded (footer + list).
+_COLLAPSED_PX = 40
+_EXPANDED_PX = 190
 
 
 class MySpressoEventLog(QFrame):
-    """Footer log strip with two columns:
-        [ left card: TORRÉFACTION info ]   [ right: timestamped events list ]
-    """
+    """Collapsible footer: thin bar + on-demand timestamped event list."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName('MysEventLog')
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setFixedHeight(110)
+        # Footer bar is always visible; list adds height only when unfolded.
+        self.setMinimumHeight(_COLLAPSED_PX)
 
-        # ── Left card: TORRÉFACTION info ────────────────────────────────────
-        left_block = QVBoxLayout()
-        left_block.setSpacing(2)
-        left_block.setContentsMargins(0, 0, 0, 0)
-
-        self._left_kicker = QLabel('TORRÉFACTION')
-        self._left_kicker.setStyleSheet(
-            'font-size: 10px; font-weight: 600; letter-spacing: 0.5px;'
-            ' color: #7A736A;'
-        )
-
-        self._left_date = QLabel('')
-        self._left_date.setStyleSheet(
-            'font-family: "JetBrains Mono"; font-size: 11px; color: #4E4A44;'
-        )
-
-        self._left_stats = QLabel('— écoulé · — vert')
-        self._left_stats.setStyleSheet(
-            'font-family: "JetBrains Mono"; font-size: 13px; font-weight: 500;'
-            ' color: #070D1F;'
-        )
-
-        left_block.addWidget(self._left_kicker)
-        left_block.addWidget(self._left_date)
-        left_block.addStretch()
-        left_block.addWidget(self._left_stats)
-
-        left_card = QFrame()
-        left_card.setObjectName('MysEventLogCard')
-        left_card.setLayout(left_block)
-        # Widened so "30.00 Kg vert" (and similar full-unit strings) fit on
-        # one line rather than getting truncated to "30.00 Kg v…".
-        left_card.setMinimumWidth(300)
-        left_card.setStyleSheet(
-            'QFrame#MysEventLogCard { background-color: #F2EFE7;'
-            ' border-radius: 2px; padding: 12px 16px; }'
-        )
-
-        # ── Right: timestamped events ───────────────────────────────────────
+        # ── Timestamped events list (hidden by default) ─────────────────────
         self._list = QListWidget()
         self._list.setObjectName('MysEventLogList')
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -96,17 +69,54 @@ class MySpressoEventLog(QFrame):
             ' color: #4E4A44;'
             '}'
             'QListWidget#MysEventLogList::item {'
-            ' padding: 2px 0;'
+            ' padding: 2px 0 2px 20px;'
             ' border: none;'
             '}'
         )
+        self._list.setVisible(False)
 
-        # ── Outer layout ────────────────────────────────────────────────────
-        root = QHBoxLayout(self)
-        root.setContentsMargins(20, 8, 20, 12)
-        root.setSpacing(16)
-        root.addWidget(left_card)
+        # ── Footer bar (always visible) ─────────────────────────────────────
+        self._toggle = QPushButton('▸  Historique')
+        self._toggle.setObjectName('MysEventLogToggle')
+        self._toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._toggle.setFlat(True)
+        self._toggle.setStyleSheet(
+            'QPushButton#MysEventLogToggle {'
+            ' font-size: 11px; font-weight: 600; letter-spacing: 0.5px;'
+            ' color: #4E4A44; border: 1px solid #D9D2C5; border-radius: 3px;'
+            ' padding: 4px 10px; background-color: #F2EFE7; }'
+            'QPushButton#MysEventLogToggle:hover { background-color: #E8E3D6; }'
+        )
+        self._toggle.clicked.connect(self._toggle_history)
+
+        self._summary = QLabel('TORRÉFACTION · —')
+        self._summary.setStyleSheet(
+            'font-family: "JetBrains Mono"; font-size: 12px; font-weight: 500;'
+            ' color: #4E4A44;'
+        )
+
+        footer = QHBoxLayout()
+        footer.setContentsMargins(20, 6, 20, 6)
+        footer.setSpacing(14)
+        footer.addWidget(self._toggle)
+        footer.addWidget(self._summary)
+        footer.addStretch(1)
+        self._footer_extra_slot = footer  # stats inserted before the trailing edge
+        self._footer_bar = QWidget()
+        self._footer_bar.setObjectName('MysEventLogFooter')
+        self._footer_bar.setFixedHeight(_COLLAPSED_PX)
+        self._footer_bar.setLayout(footer)
+
+        # ── Outer layout: list above, footer bar pinned at the bottom ───────
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
         root.addWidget(self._list, 1)
+        root.addWidget(self._footer_bar)
+
+        # Splitter wiring (set via attach_splitter) for fold / unfold resizing.
+        self._splitter: Splitter | None = None
+        self._splitter_index: int = -1
 
         # Refresh state
         self._aw: ApplicationWindow | None = None
@@ -115,43 +125,70 @@ class MySpressoEventLog(QFrame):
         self._refresh.setInterval(500)
         self._refresh.timeout.connect(self._refresh_log)
 
+    # ── Public wiring ─────────────────────────────────────────────────────────
     def wire(self, app_window: ApplicationWindow) -> None:
         self._aw = app_window
         self._refresh_log()
         self._refresh.start()
 
-    # ── Internal ────────────────────────────────────────────────────────────
+    def set_footer_extra(self, widget: QWidget | None) -> None:
+        """Embed an extra widget (e.g. the slider stats strip) on the right
+        of the footer bar, after the stretch so it sits flush right."""
+        if widget is not None:
+            self._footer_extra_slot.addWidget(widget)
+
+    def attach_splitter(self, splitter: Splitter, index: int) -> None:
+        """Remember the vertical splitter + this section's index so the
+        toggle can grow/shrink the bottom zone (taking space from the chart)."""
+        self._splitter = splitter
+        self._splitter_index = index
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+    def _toggle_history(self) -> None:
+        show = not self._list.isVisible()
+        self._list.setVisible(show)
+        self._toggle.setText(('▾  ' if show else '▸  ') + 'Historique')
+        sp = self._splitter
+        idx = self._splitter_index
+        if sp is None or idx < 0:
+            return
+        sizes = sp.sizes()
+        if not (0 <= idx < len(sizes)):
+            return
+        target = _EXPANDED_PX if show else _COLLAPSED_PX
+        delta = target - sizes[idx]
+        sizes[idx] = target
+        # Take/give the difference from the chart section (the one above us).
+        graph_idx = idx - 1
+        if 0 <= graph_idx < len(sizes):
+            sizes[graph_idx] = max(80, sizes[graph_idx] - delta)
+        sp.setSizes(sizes)
 
     def _refresh_log(self) -> None:
         aw = self._aw
         if aw is None:
             return
 
-        # ── Left card: date + elapsed / green weight ────────────────────────
+        # ── Footer summary: date · elapsed · green weight ───────────────────
         try:
             from PyQt6.QtCore import QDateTime
-            now = QDateTime.currentDateTime()
-            self._left_date.setText(now.toString('dd/MM/yyyy HH:mm'))
+            date_str = QDateTime.currentDateTime().toString('dd/MM HH:mm')
         except Exception:  # noqa: BLE001
-            pass
+            date_str = '—'
 
+        elapsed_str = '—'
+        green_str = ''
         try:
             qmc = aw.qmc
             # Prefer Artisan's authoritative ArtisanTime clock — it advances
-            # every frame as long as monitoring is on, even if the user has
-            # no real probe (in which case qmc.timex stays empty and the
-            # previous timex-based fallback would have shown 0:00 forever).
+            # every frame while monitoring is on, even without a real probe.
             elapsed: float = 0.0
             try:
                 if getattr(qmc, 'flagstart', False):
-                    # Recording is running → timeclock.elapsed() ticks since
-                    # CHARGE (or since DEBUT when no CHARGE yet).
                     elapsed = max(0.0, qmc.timeclock.elapsed() / 1000.0)
                 elif getattr(qmc, 'flagon', False):
-                    # Monitoring only — show time since ON.
                     elapsed = max(0.0, qmc.timeclock.elapsedMilli() / 1000.0)
                 else:
-                    # Idle: fall back to the last frame in timex if any.
                     timez = getattr(qmc, 'timex', None) or []
                     timeindex = getattr(qmc, 'timeindex', None) or [-1]
                     if (timez and timeindex and timeindex[0] >= 0
@@ -164,11 +201,15 @@ class MySpressoEventLog(QFrame):
             weight = getattr(qmc, 'weight', None) or [0, 0, 'kg']
             green = float(weight[0]) if weight and weight[0] else 0
             unit = weight[2] if len(weight) > 2 else 'kg'
-            self._left_stats.setText(
-                f'{elapsed_str} écoulé · {green:.2f} {unit} vert'
-            )
+            if green:
+                green_str = f'{green:.2f} {unit} vert'
         except Exception:  # noqa: BLE001
             pass
+
+        summary = f'TORRÉFACTION · {date_str} · {elapsed_str} écoulé'
+        if green_str:
+            summary += f' · {green_str}'
+        self._summary.setText(summary)
 
         # ── Right list: only redraw when messagehist actually changed ───────
         try:

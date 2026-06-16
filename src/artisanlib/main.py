@@ -1544,7 +1544,7 @@ class ApplicationWindow(QMainWindow):
         'helpAboutAction', 'checkUpdateAction', 'errorAction', 'messageAction', 'serialAction', 'platformAction', 'aboutQtAction',
         'helpDocumentationAction', 'KshortCAction', 'profile_data_type_adapter', 'official_build',
         'myspressoSettingsAction', 'pushRoastToMyspressoAction',
-        'myspresso_header', 'myspresso_hero', 'myspresso_eventlog', 'myspresso_stats',
+        'myspresso_header', 'myspresso_hero', 'myspresso_eventlog', 'myspresso_stats', 'myspresso_pilot',
         'update_checker' ]
 
     nLCDS: Final[int] = 10 # maximum number of LCDs and extra devices (2x10 => 20 in total!)
@@ -4225,14 +4225,31 @@ class ApplicationWindow(QMainWindow):
         self.lcdFrame.setContentsMargins(0,0,0,0)
         self.lcdFrame.setSizePolicy(QSizePolicy.Policy.Maximum,QSizePolicy.Policy.Expanding) # prevent horizontal expansion (graph might not maximize otherwise)
 
-        # MySpresso fork: horizontal splitter so graph area and LCD panel
-        # are both user-resizable. midleft_widget wraps midleftlayout.
+        # MySpresso fork: pilot column — large TEMP / RoR / DEV readouts to the
+        # right of the chart (relocates the small hero meta panel into a
+        # glanceable, Artisan-style vertical readout column).
+        try:
+            from artisanlib.myspresso_pilot import MySpressoPilotColumn
+            self.myspresso_pilot: MySpressoPilotColumn = MySpressoPilotColumn(self.main_widget)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+            self.myspresso_pilot = None  # type: ignore[assignment]
+
+        # MySpresso fork: horizontal splitter so graph area, pilot column and
+        # (native, hidden) LCD panel are all user-resizable. midleft_widget
+        # wraps midleftlayout.
         self.mys_h_splitter: Splitter = Splitter(Qt.Orientation.Horizontal)
         self.mys_h_splitter.setChildrenCollapsible(False)
         self.mys_h_splitter.setContentsMargins(0, 0, 0, 0)
         self.mys_h_splitter.addWidget(midleft_widget)
+        if self.myspresso_pilot is not None:
+            self.mys_h_splitter.addWidget(self.myspresso_pilot)
         self.mys_h_splitter.addWidget(self.lcdFrame)
-        self.mys_h_splitter.setSizes([9999, 0])  # lcdFrame hidden by default
+        if self.myspresso_pilot is not None:
+            # graph | pilot (~210px) | native lcdFrame (hidden)
+            self.mys_h_splitter.setSizes([9999, 210, 0])
+        else:
+            self.mys_h_splitter.setSizes([9999, 0])  # lcdFrame hidden by default
 
         # MySpresso fork: top header strip + hero panel. Both additive —
         # do not touch level1frame / midlayout below.
@@ -4284,19 +4301,23 @@ class ApplicationWindow(QMainWindow):
         self.mys_v_splitter.addWidget(self.mys_h_splitter)
         _mys_v_sizes.append(9999)
 
-        if self.myspresso_stats is not None or self.myspresso_eventlog is not None:
-            _mys_bottom = QWidget()
-            _mys_bottom.setContentsMargins(0, 0, 0, 0)
-            _mys_bottom_layout = QVBoxLayout(_mys_bottom)
-            _mys_bottom_layout.setContentsMargins(0, 0, 0, 0)
-            _mys_bottom_layout.setSpacing(0)
+        # Bottom zone: a thin always-visible footer bar (Historique toggle +
+        # torréfaction summary + slider stats). The timestamped event list is
+        # folded by default so the chart grid keeps the height; it unfolds via
+        # the toggle, which grows this splitter section (see attach_splitter).
+        if self.myspresso_eventlog is not None:
+            # Embed the slider stats strip flush-right inside the footer bar.
             if self.myspresso_stats is not None:
-                _mys_bottom_layout.addWidget(self.myspresso_stats)
-            if self.myspresso_eventlog is not None:
-                _mys_bottom_layout.addWidget(self.myspresso_eventlog, 1)
-            _mys_bottom.setMinimumHeight(40)
-            self.mys_v_splitter.addWidget(_mys_bottom)
-            _mys_v_sizes.append(120)
+                self.myspresso_eventlog.set_footer_extra(self.myspresso_stats)
+            self.mys_v_splitter.addWidget(self.myspresso_eventlog)
+            # Folded default: footer bar height only → chart grid maximised.
+            _mys_v_sizes.append(40)
+            self.myspresso_eventlog.attach_splitter(
+                self.mys_v_splitter, self.mys_v_splitter.count() - 1)
+        elif self.myspresso_stats is not None:
+            # No event log → just show the stats strip.
+            self.mys_v_splitter.addWidget(self.myspresso_stats)
+            _mys_v_sizes.append(28)
 
         self.mys_v_splitter.setSizes(_mys_v_sizes)
         mainlayout.addWidget(self.mys_v_splitter, 1)
@@ -4322,6 +4343,11 @@ class ApplicationWindow(QMainWindow):
         try:
             if self.myspresso_stats is not None:
                 self.myspresso_stats.wire(self)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+        try:
+            if self.myspresso_pilot is not None:
+                self.myspresso_pilot.wire(self)
         except Exception as _e:  # pylint: disable=broad-except
             _log.exception(_e)
 
@@ -5595,6 +5621,12 @@ class ApplicationWindow(QMainWindow):
                 if hero is not None:
                     try:
                         hero.update_cursor(s)
+                    except Exception as _ex:  # pylint: disable=broad-except
+                        _log.exception(_ex)
+                pilot = getattr(self, 'myspresso_pilot', None)
+                if pilot is not None:
+                    try:
+                        pilot.update_cursor(s)
                     except Exception as _ex:  # pylint: disable=broad-except
                         _log.exception(_ex)
             self.ntb.set_message = _myspresso_set_message  # type: ignore[method-assign]
