@@ -69,21 +69,41 @@ class MySpressoPilotColumn(QFrame):
         root.setContentsMargins(16, 20, 16, 16)
         root.setSpacing(0)
 
-        # ── TEMP (BT) ───────────────────────────────────────────────────────
+        # ── Native Artisan LCD panel slot (ET / BT / Δ BT …) ────────────────
+        # The native lcdFrame is reparented here by main.py via set_native_lcds
+        # when the user enables "Readings" (Ctrl+L). It owns ET/BT/RoR with the
+        # familiar seven-segment look + tare / curve-toggle interactions.
+        self._native_slot = QVBoxLayout()
+        self._native_slot.setContentsMargins(0, 0, 0, 0)
+        self._native_slot.setSpacing(0)
+        root.addLayout(self._native_slot)
+        self._native_divider = self._divider()
+        self._native_divider.setVisible(False)
+        root.addWidget(self._native_divider)
+        self._native_gap = QWidget()
+        self._native_gap.setFixedHeight(14)
+        self._native_gap.setVisible(False)
+        root.addWidget(self._native_gap)
+
+        # ── Styled TEMP / RoR block (shown when native LCDs are OFF) ─────────
+        styled = QVBoxLayout()
+        styled.setContentsMargins(0, 0, 0, 0)
+        styled.setSpacing(0)
         self._temp_value = self._big_value('210.4', '#A8392E', 38)
-        root.addLayout(self._readout('TEMP BT', self._temp_value))
-        root.addSpacing(14)
-        root.addWidget(self._divider())
-        root.addSpacing(14)
-
-        # ── RoR (Δ BT) ──────────────────────────────────────────────────────
+        styled.addLayout(self._readout('TEMP BT', self._temp_value))
+        styled.addSpacing(14)
+        styled.addWidget(self._divider())
+        styled.addSpacing(14)
         self._ror_value = self._big_value('—', '#070D1F', 30)
-        root.addLayout(self._readout('RoR Δ BT', self._ror_value))
-        root.addSpacing(14)
-        root.addWidget(self._divider())
-        root.addSpacing(14)
+        styled.addLayout(self._readout('RoR Δ BT', self._ror_value))
+        styled.addSpacing(14)
+        styled.addWidget(self._divider())
+        styled.addSpacing(14)
+        self._styled_block = QWidget()
+        self._styled_block.setLayout(styled)
+        root.addWidget(self._styled_block)
 
-        # ── DEV (development time ratio) ────────────────────────────────────
+        # ── DEV (development time ratio) — always shown ─────────────────────
         self._dev_value = self._big_value('—', '#070D1F', 30)
         root.addLayout(self._readout('DÉVELOPPEMENT', self._dev_value))
 
@@ -173,6 +193,25 @@ class MySpressoPilotColumn(QFrame):
         self._aw = app_window
         self._refresh_values()
         self._refresh.start()
+
+    def set_native_lcds(self, lcd_frame: QWidget) -> None:
+        """Reparent the native Artisan LCD panel (ET/BT/ΔBT …) into the top of
+        this column. Its visibility stays owned by Artisan's Readings toggle
+        (showLCDs/hideLCDs); set_native_mode mirrors that to avoid duplication."""
+        from PyQt6.QtWidgets import QSizePolicy
+        # In the column the panel sits at its natural height at the top; the
+        # column's trailing stretch absorbs the slack.
+        lcd_frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self._native_slot.addWidget(lcd_frame)
+        self.set_native_mode(lcd_frame.isVisible())
+
+    def set_native_mode(self, native_on: bool) -> None:
+        """When the native LCDs are visible, hide the styled TEMP/RoR block
+        (they show the same BT / Δ BT) so nothing is duplicated. DÉVELOPPEMENT
+        and the MAGASIN/CHARGE footer are unique and always remain visible."""
+        self._styled_block.setVisible(not native_on)
+        self._native_divider.setVisible(native_on)
+        self._native_gap.setVisible(native_on)
 
     def update_cursor(self, raw_message: str) -> None:
         """Display the matplotlib cursor temperature / RoR in the column.

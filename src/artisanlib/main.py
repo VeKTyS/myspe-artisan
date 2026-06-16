@@ -4235,20 +4235,23 @@ class ApplicationWindow(QMainWindow):
             _log.exception(_e)
             self.myspresso_pilot = None  # type: ignore[assignment]
 
-        # MySpresso fork: horizontal splitter so graph area, pilot column and
-        # (native, hidden) LCD panel are all user-resizable. midleft_widget
-        # wraps midleftlayout.
+        # MySpresso fork: horizontal splitter — graph | pilot column. The
+        # native Artisan LCD panel (lcdFrame) is NOT a separate pane any more:
+        # it is reparented INTO the pilot column (set_native_lcds) so the two
+        # never compete for width / duplicate ET/BT/RoR. midleft_widget wraps
+        # midleftlayout.
         self.mys_h_splitter: Splitter = Splitter(Qt.Orientation.Horizontal)
         self.mys_h_splitter.setChildrenCollapsible(False)
         self.mys_h_splitter.setContentsMargins(0, 0, 0, 0)
         self.mys_h_splitter.addWidget(midleft_widget)
         if self.myspresso_pilot is not None:
+            self.myspresso_pilot.set_native_lcds(self.lcdFrame)
             self.mys_h_splitter.addWidget(self.myspresso_pilot)
-        self.mys_h_splitter.addWidget(self.lcdFrame)
-        if self.myspresso_pilot is not None:
-            # graph | pilot (~210px) | native lcdFrame (hidden)
-            self.mys_h_splitter.setSizes([9999, 210, 0])
+            # graph | unified pilot column (native LCDs + DEV + context)
+            self.mys_h_splitter.setSizes([9999, 230])
         else:
+            # No pilot column → fall back to the native lcdFrame as its own pane.
+            self.mys_h_splitter.addWidget(self.lcdFrame)
             self.mys_h_splitter.setSizes([9999, 0])  # lcdFrame hidden by default
 
         # MySpresso fork: top header strip + hero panel. Both additive —
@@ -12316,6 +12319,9 @@ class ApplicationWindow(QMainWindow):
     def hideLCDs(self, changeDefault:bool = True) -> None:
         self.lcd1.setVisible(False)
         self.lcdFrame.setVisible(False)
+        # MySpresso fork: native LCDs off → show the styled TEMP/RoR readouts.
+        if getattr(self, 'myspresso_pilot', None) is not None:
+            self.myspresso_pilot.set_native_mode(False)
         self.readingsAction.setChecked(False)
         if changeDefault:
             if self.qmc.flagstart:
@@ -12330,6 +12336,9 @@ class ApplicationWindow(QMainWindow):
         # Keep lcd1 hidden so we don't show two timers in the main canvas.
         self.lcd1.setVisible(False)
         self.lcdFrame.setVisible(True)
+        # MySpresso fork: native LCDs on → hide the styled TEMP/RoR (no dup).
+        if getattr(self, 'myspresso_pilot', None) is not None:
+            self.myspresso_pilot.set_native_mode(True)
         self.readingsAction.setChecked(True)
         if changeDefault:
             if self.qmc.flagstart:
