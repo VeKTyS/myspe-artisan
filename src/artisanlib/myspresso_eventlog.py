@@ -32,6 +32,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from artisanlib.styles import current_semantic_tokens
+
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow
     from artisanlib.widgets import Splitter
@@ -62,17 +64,6 @@ class MySpressoEventLog(QFrame):
         f = QFont('JetBrains Mono')
         f.setPointSize(11)
         self._list.setFont(f)
-        self._list.setStyleSheet(
-            'QListWidget#MysEventLogList {'
-            ' background-color: transparent;'
-            ' border: none;'
-            ' color: #4E4A44;'
-            '}'
-            'QListWidget#MysEventLogList::item {'
-            ' padding: 2px 0 2px 20px;'
-            ' border: none;'
-            '}'
-        )
         self._list.setVisible(False)
 
         # ── Footer bar (always visible) ─────────────────────────────────────
@@ -80,20 +71,9 @@ class MySpressoEventLog(QFrame):
         self._toggle.setObjectName('MysEventLogToggle')
         self._toggle.setCursor(Qt.CursorShape.PointingHandCursor)
         self._toggle.setFlat(True)
-        self._toggle.setStyleSheet(
-            'QPushButton#MysEventLogToggle {'
-            ' font-size: 11px; font-weight: 600; letter-spacing: 0.5px;'
-            ' color: #4E4A44; border: 1px solid #D9D2C5; border-radius: 3px;'
-            ' padding: 4px 10px; background-color: #F2EFE7; }'
-            'QPushButton#MysEventLogToggle:hover { background-color: #E8E3D6; }'
-        )
         self._toggle.clicked.connect(self._toggle_history)
 
         self._summary = QLabel('TORRÉFACTION · —')
-        self._summary.setStyleSheet(
-            'font-family: "JetBrains Mono"; font-size: 12px; font-weight: 500;'
-            ' color: #4E4A44;'
-        )
 
         footer = QHBoxLayout()
         footer.setContentsMargins(20, 6, 20, 6)
@@ -124,6 +104,41 @@ class MySpressoEventLog(QFrame):
         self._refresh = QTimer(self)
         self._refresh.setInterval(500)
         self._refresh.timeout.connect(self._refresh_log)
+
+        self._apply_theme()
+
+    # ── Theming ───────────────────────────────────────────────────────────────
+    def _apply_theme(self) -> None:
+        """(Re)apply all colour-bearing styles from the current theme tokens."""
+        tok = current_semantic_tokens()
+        self._list.setStyleSheet(
+            'QListWidget#MysEventLogList {'
+            ' background-color: transparent;'
+            ' border: none;'
+            f' color: {tok.fg_secondary};'
+            '}'
+            'QListWidget#MysEventLogList::item {'
+            ' padding: 2px 0 2px 20px;'
+            ' border: none;'
+            '}'
+        )
+        self._toggle.setStyleSheet(
+            'QPushButton#MysEventLogToggle {'
+            ' font-size: 11px; font-weight: 600; letter-spacing: 0.5px;'
+            f' color: {tok.fg_secondary}; border: 1px solid {tok.border_strong};'
+            ' border-radius: 3px;'
+            f' padding: 4px 10px; background-color: {tok.bg_sunken}; }}'
+            'QPushButton#MysEventLogToggle:hover {'
+            f' background-color: {tok.border}; }}'
+        )
+        self._summary.setStyleSheet(
+            'font-family: "JetBrains Mono"; font-size: 12px; font-weight: 500;'
+            f' color: {tok.fg_secondary};'
+        )
+
+    def restyle(self) -> None:
+        """Public hook: re-resolve theme tokens after a light/dark switch."""
+        self._apply_theme()
 
     # ── Public wiring ─────────────────────────────────────────────────────────
     def wire(self, app_window: ApplicationWindow) -> None:

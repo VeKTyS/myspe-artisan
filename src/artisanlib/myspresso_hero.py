@@ -38,6 +38,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from artisanlib.styles import current_semantic_tokens
+
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow
 
@@ -75,20 +77,10 @@ class MySpressoHeroPanel(QFrame):
 
         self._kicker = QLabel('PROFIL EN COURS · #0')
         self._kicker.setProperty('role', 'muted')
-        self._kicker.setStyleSheet(
-            'font-size: 11px; font-weight: 600; letter-spacing: 0.5px;'
-            ' color: #7A736A;'
-        )
 
         self._title = QLabel('Analyseur de torréfaction')
-        self._title.setStyleSheet(
-            'font-size: 26px; font-weight: 700; color: #070D1F;'
-        )
 
         self._filename = QLabel('')
-        self._filename.setStyleSheet(
-            'font-family: "JetBrains Mono"; font-size: 11px; color: #7A736A;'
-        )
 
         title_block.addWidget(self._kicker)
         title_block.addWidget(self._title)
@@ -114,7 +106,6 @@ class MySpressoHeroPanel(QFrame):
         f_timer.setPixelSize(46)
         f_timer.setWeight(QFont.Weight.DemiBold)
         self._timer_label.setFont(f_timer)
-        self._timer_label.setStyleSheet('color: #070D1F;')
         self._timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Temperature echo under the timer (the authoritative, large readout
@@ -126,7 +117,6 @@ class MySpressoHeroPanel(QFrame):
         f_temp.setPixelSize(17)
         f_temp.setWeight(QFont.Weight.Medium)
         self._temp_label.setFont(f_temp)
-        self._temp_label.setStyleSheet('color: #A8392E;')
         self._temp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         timer_block.addStretch()
@@ -137,12 +127,9 @@ class MySpressoHeroPanel(QFrame):
         timer_w = QWidget()
         timer_w.setObjectName('MysHeroTimerBlock')
         timer_w.setLayout(timer_block)
-        # v2 design: thin warm dividers framing the timer hero block.
-        # Scope to objectName so descendants (QLabel) don't inherit borders.
-        timer_w.setStyleSheet(
-            '#MysHeroTimerBlock { border-left: 1px solid #E8E3D6;'
-            ' border-right: 1px solid #E8E3D6; }'
-        )
+        # Thin dividers framing the timer hero block are applied (with the
+        # current theme's border token) in _apply_theme().
+        self._timer_w = timer_w
 
         # Meta panel (MAGASIN / CHARGE / Δ T° / DEV. RATIO) removed: the
         # piloting indicators now live in the right-hand MySpressoPilotColumn.
@@ -164,6 +151,41 @@ class MySpressoHeroPanel(QFrame):
         self._refresh = QTimer(self)
         self._refresh.setInterval(500)
         self._refresh.timeout.connect(self._refresh_values)
+
+        self._apply_theme()
+
+    # ── Theming ──────────────────────────────────────────────────────────────
+
+    def _apply_theme(self) -> None:
+        """(Re-)apply all colour-bearing styles from the current semantic
+        tokens. Called once at the end of __init__ and again via restyle()
+        whenever the OS colour scheme flips."""
+        tok = current_semantic_tokens()
+        self._kicker.setStyleSheet(
+            'font-size: 11px; font-weight: 600; letter-spacing: 0.5px;'
+            f' color: {tok.fg_muted};'
+        )
+        self._title.setStyleSheet(
+            f'font-size: 26px; font-weight: 700; color: {tok.fg_primary};'
+        )
+        self._filename.setStyleSheet(
+            'font-family: "JetBrains Mono"; font-size: 11px;'
+            f' color: {tok.fg_muted};'
+        )
+        self._timer_label.setStyleSheet(f'color: {tok.fg_primary};')
+        # Red accent echo of the BT temperature (mockup shows it in the warm
+        # accent red, not the navy BT chart colour).
+        self._temp_label.setStyleSheet(f'color: {tok.accent};')
+        # v2 design: thin warm dividers framing the timer hero block.
+        # Scope to objectName so descendants (QLabel) don't inherit borders.
+        self._timer_w.setStyleSheet(
+            f'#MysHeroTimerBlock {{ border-left: 1px solid {tok.border};'
+            f' border-right: 1px solid {tok.border}; }}'
+        )
+
+    def restyle(self) -> None:
+        """Public hook: re-apply theme-dependent styles (OS theme flip)."""
+        self._apply_theme()
 
     def wire(self, app_window: ApplicationWindow) -> None:
         """Bind to the application window and start polling."""

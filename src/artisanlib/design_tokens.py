@@ -173,6 +173,77 @@ ELEVATION_DROPDOWN = (
 )
 ELEVATION_MODAL = '0 24px 48px rgba(15,30,61,0.18), 0 2px 8px rgba(15,30,61,0.08)'
 
+# ── RUNTIME THEME SELECTION ────────────────────────────────────────────────
+
+class SemanticTokens:
+    """Role-based colours resolved for one theme (light or dark).
+
+    Widgets that style themselves in code (the myspresso_* modules)
+    call ``semantic(dark)`` once and read roles from the result instead
+    of hardcoding light hex values — that is what makes them dark-mode
+    aware for free.
+    """
+
+    __slots__ = ('dark', 'bg', 'bg_raised', 'bg_sunken', 'surface', 'surface_alt',
+                 'border', 'border_strong', 'fg_primary', 'fg_secondary',
+                 'fg_muted', 'fg_on_brand', 'fg_accent', 'brand', 'accent',
+                 'chart_et', 'chart_bt', 'chart_delta',
+                 'success_fg', 'success_bg', 'error_fg', 'error_bg')
+
+    def __init__(self, dark: bool) -> None:
+        self.dark = dark
+        if dark:
+            self.bg = DARK_BG
+            self.bg_raised = DARK_BG_RAISED
+            self.bg_sunken = DARK_BG_SUNKEN
+            self.surface = DARK_SURFACE
+            self.surface_alt = DARK_SURFACE_ALT
+            self.border = DARK_BORDER
+            self.border_strong = DARK_BORDER_STRONG
+            self.fg_primary = DARK_FG_PRIMARY
+            self.fg_secondary = DARK_FG_SECONDARY
+            self.fg_muted = DARK_FG_MUTED
+            self.fg_on_brand = DARK_FG_ON_BRAND
+            self.fg_accent = DARK_FG_ACCENT
+            self.brand = DARK_BRAND
+            self.accent = DARK_ACCENT
+            # chart colours lightened for a dark canvas
+            self.chart_et = RED_300
+            self.chart_bt = NAVY_200
+            self.chart_delta = DARK_FG_MUTED
+            self.success_fg = DARK_SUCCESS_FG
+            self.success_bg = DARK_SUCCESS_BG
+            self.error_fg = RED_300
+            self.error_bg = DARK_ERROR_BG
+        else:
+            self.bg = LIGHT_BG
+            self.bg_raised = LIGHT_BG_RAISED
+            self.bg_sunken = LIGHT_BG_SUNKEN
+            self.surface = LIGHT_SURFACE
+            self.surface_alt = LIGHT_SURFACE_ALT
+            self.border = LIGHT_BORDER
+            self.border_strong = LIGHT_BORDER_STRONG
+            self.fg_primary = LIGHT_FG_PRIMARY
+            self.fg_secondary = LIGHT_FG_SECONDARY
+            self.fg_muted = LIGHT_FG_MUTED
+            self.fg_on_brand = LIGHT_FG_ON_BRAND
+            self.fg_accent = LIGHT_FG_ACCENT
+            self.brand = LIGHT_BRAND
+            self.accent = LIGHT_ACCENT
+            self.chart_et = CHART_TE
+            self.chart_bt = CHART_BT
+            self.chart_delta = CHART_DELTA
+            self.success_fg = SUCCESS_FG
+            self.success_bg = SUCCESS_BG
+            self.error_fg = ERROR_FG
+            self.error_bg = ERROR_BG
+
+
+def semantic(dark: bool) -> SemanticTokens:
+    """Semantic tokens for the requested theme."""
+    return SemanticTokens(dark)
+
+
 # ── LEGACY ALIASES ─────────────────────────────────────────────────────────
 # Match variable names used in original Artisan main.py (line 239-240) so we
 # can migrate existing button-color call-sites with minimal churn.

@@ -40,6 +40,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from artisanlib.styles import current_semantic_tokens
+
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow
 
@@ -60,10 +62,14 @@ class MySpressoPilotColumn(QFrame):
         self.setObjectName('MysPilot')
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setMinimumWidth(170)
-        # v2 design: thin warm divider separating the column from the chart.
-        self.setStyleSheet(
-            '#MysPilot { border-left: 1px solid #E8E3D6; background-color: #FBFAF6; }'
-        )
+
+        # Registries of colour-bearing sub-widgets, restyled by _apply_theme().
+        # _big_values maps each big readout label to the SemanticTokens
+        # attribute providing its colour (temp = chart_et red, others navy).
+        self._big_values: list[tuple[QLabel, str]] = []
+        self._kickers: list[QLabel] = []
+        self._dividers: list[QFrame] = []
+        self._ctx_values: list[QLabel] = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 20, 16, 16)
@@ -89,12 +95,12 @@ class MySpressoPilotColumn(QFrame):
         styled = QVBoxLayout()
         styled.setContentsMargins(0, 0, 0, 0)
         styled.setSpacing(0)
-        self._temp_value = self._big_value('210.4', '#A8392E', 38)
+        self._temp_value = self._big_value('210.4', 'chart_et', 38)
         styled.addLayout(self._readout('TEMP BT', self._temp_value))
         styled.addSpacing(14)
         styled.addWidget(self._divider())
         styled.addSpacing(14)
-        self._ror_value = self._big_value('—', '#070D1F', 30)
+        self._ror_value = self._big_value('—', 'fg_primary', 30)
         styled.addLayout(self._readout('RoR Δ BT', self._ror_value))
         styled.addSpacing(14)
         styled.addWidget(self._divider())
@@ -104,7 +110,7 @@ class MySpressoPilotColumn(QFrame):
         root.addWidget(self._styled_block)
 
         # ── DEV (development time ratio) — always shown ─────────────────────
-        self._dev_value = self._big_value('—', '#070D1F', 30)
+        self._dev_value = self._big_value('—', 'fg_primary', 30)
         root.addLayout(self._readout('DÉVELOPPEMENT', self._dev_value))
 
         root.addStretch()
@@ -136,26 +142,25 @@ class MySpressoPilotColumn(QFrame):
         self._refresh.setInterval(500)
         self._refresh.timeout.connect(self._refresh_values)
 
-    # ── widget builders ─────────────────────────────────────────────────────
-    @staticmethod
-    def _big_value(text: str, color: str, px: int) -> QLabel:
+        # All sub-widgets exist — apply the theme-dependent colours.
+        self._apply_theme()
+
+    # ── widget builders (structure only — colours applied by _apply_theme) ──
+    def _big_value(self, text: str, token_attr: str, px: int) -> QLabel:
+        """Big readout label; ``token_attr`` names the SemanticTokens colour."""
         lbl = QLabel(text)
         f = QFont('JetBrains Mono')
         f.setStyleHint(QFont.StyleHint.Monospace)
         f.setPixelSize(px)
         f.setWeight(QFont.Weight.DemiBold)
         lbl.setFont(f)
-        lbl.setStyleSheet(f'color: {color};')
         lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self._big_values.append((lbl, token_attr))
         return lbl
 
-    @staticmethod
-    def _kicker(text: str) -> QLabel:
+    def _kicker(self, text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet(
-            'font-size: 10px; font-weight: 600; letter-spacing: 0.5px;'
-            ' color: #7A736A;'
-        )
+        self._kickers.append(lbl)
         return lbl
 
     def _readout(self, label: str, value: QLabel) -> QVBoxLayout:
@@ -165,31 +170,54 @@ class MySpressoPilotColumn(QFrame):
         box.addWidget(value)
         return box
 
-    @staticmethod
-    def _divider() -> QFrame:
+    def _divider(self) -> QFrame:
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Plain)
-        line.setStyleSheet('color: #E8E3D6; background-color: #E8E3D6; max-height: 1px;')
+        self._dividers.append(line)
         return line
 
-    @staticmethod
-    def _ctx_label(text: str) -> QLabel:
-        lbl = QLabel(text)
-        lbl.setStyleSheet(
-            'font-size: 10px; font-weight: 600; letter-spacing: 0.5px;'
-            ' color: #7A736A;'
-        )
+    def _ctx_label(self, text: str) -> QLabel:
+        # Same kicker treatment (small warm-grey caption).
+        return self._kicker(text)
+
+    def _ctx_value(self) -> QLabel:
+        lbl = QLabel('—')
+        self._ctx_values.append(lbl)
         return lbl
 
-    @staticmethod
-    def _ctx_value() -> QLabel:
-        lbl = QLabel('—')
-        lbl.setStyleSheet(
-            'font-family: "JetBrains Mono"; font-size: 12px; font-weight: 500;'
-            ' color: #070D1F;'
+    # ── theming ─────────────────────────────────────────────────────────────
+    def _apply_theme(self) -> None:
+        """(Re-)apply every colour-bearing style from the current semantic
+        tokens. Called at the end of __init__ and again via restyle() when
+        the system colour scheme flips."""
+        tok = current_semantic_tokens()
+        # Column: thin divider separating it from the chart, on the app bg.
+        self.setStyleSheet(
+            f'#MysPilot {{ border-left: 1px solid {tok.border};'
+            f' background-color: {tok.bg}; }}'
         )
-        return lbl
+        for lbl, token_attr in self._big_values:
+            lbl.setStyleSheet(f'color: {getattr(tok, token_attr)};')
+        for lbl in self._kickers:
+            lbl.setStyleSheet(
+                'font-size: 10px; font-weight: 600; letter-spacing: 0.5px;'
+                f' color: {tok.fg_muted};'
+            )
+        for line in self._dividers:
+            line.setStyleSheet(
+                f'color: {tok.border}; background-color: {tok.border};'
+                ' max-height: 1px;'
+            )
+        for lbl in self._ctx_values:
+            lbl.setStyleSheet(
+                'font-family: "JetBrains Mono"; font-size: 12px;'
+                f' font-weight: 500; color: {tok.fg_primary};'
+            )
+
+    def restyle(self) -> None:
+        """Public hook: re-apply theme colours (e.g. on scheme change)."""
+        self._apply_theme()
 
     # ── lifecycle ───────────────────────────────────────────────────────────
     def wire(self, app_window: ApplicationWindow) -> None:

@@ -19,35 +19,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-
-def _make_section_header(n: str, text: str) -> QLabel:
-    """SectionHeader from Claude Design — red mono number + uppercase title
-    + thin warm bottom border. Uses rich text so the prefix can stay red
-    while the rest of the line is navy."""
-    label = QLabel()
-    label.setTextFormat(Qt.TextFormat.RichText)
-    label.setText(
-        f'<span style="font-family:\'JetBrains Mono\',monospace;'
-        f'font-size:11px;font-weight:600;color:#A8392E;">{n}</span>'
-        f'&nbsp;&nbsp;'
-        f'<span style="font-size:12px;font-weight:700;color:#070D1F;'
-        f'letter-spacing:0.6px;">{text.upper()}</span>'
-    )
-    label.setStyleSheet(
-        'QLabel { padding: 14px 0 8px 0;'
-        ' border-bottom: 1px solid #E8E3D6; }'
-    )
-    return label
-
-
-def _make_form_label(text: str) -> QLabel:
-    """Small uppercase warm-gray form label per Claude Design's Field."""
-    label = QLabel(text.upper())
-    label.setStyleSheet(
-        'QLabel { font-size: 10px; font-weight: 700; color: #7A736A;'
-        ' letter-spacing: 0.6px; padding: 0; background: transparent; }'
-    )
-    return label
+from artisanlib.styles import current_semantic_tokens
 
 
 class MyspressoSettingsDialog(QDialog):
@@ -59,6 +31,11 @@ class MyspressoSettingsDialog(QDialog):
         self.setModal(True)
 
         self._settings = QSettings()
+
+        # Colour-bearing labels kept around so _apply_theme can restyle them
+        # after a light/dark switch.
+        self._section_headers: list[tuple[QLabel, str, str]] = []
+        self._form_labels: list[QLabel] = []
 
         # ── Brand header: title + subtitle (matches Claude Design DialogShell)
         title = QLabel('Réglages MySpresso')
@@ -90,10 +67,10 @@ class MyspressoSettingsDialog(QDialog):
         # Form rows — each with a small uppercase formLabel above the input.
         form = QFormLayout()
         form.setSpacing(10)
-        form.addRow(_make_section_header('01', 'Endpoint'))
-        form.addRow(_make_form_label('URL API'), self._api_edit)
-        form.addRow(_make_form_label('URL Web'), self._web_edit)
-        form.addRow(_make_section_header('02', 'Authentification'))
+        form.addRow(self._make_section_header('01', 'Endpoint'))
+        form.addRow(self._make_form_label('URL API'), self._api_edit)
+        form.addRow(self._make_form_label('URL Web'), self._web_edit)
+        form.addRow(self._make_section_header('02', 'Authentification'))
         form.addRow('', self._auth_check)
         form.addRow('', reset_btn)
 
@@ -124,6 +101,54 @@ class MyspressoSettingsDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(note)
         layout.addWidget(buttons)
+
+        self._apply_theme()
+
+    # ── Theming ─────────────────────────────────────────────────────────────
+    def _make_section_header(self, n: str, text: str) -> QLabel:
+        """SectionHeader from Claude Design — accent mono number + uppercase
+        title + thin bottom border. Rich text so the prefix keeps the accent
+        colour while the rest of the line uses the primary foreground.
+        Colours are applied by _apply_theme."""
+        label = QLabel()
+        label.setTextFormat(Qt.TextFormat.RichText)
+        self._section_headers.append((label, n, text))
+        return label
+
+    def _make_form_label(self, text: str) -> QLabel:
+        """Small uppercase muted form label per Claude Design's Field.
+        Colours are applied by _apply_theme."""
+        label = QLabel(text.upper())
+        self._form_labels.append(label)
+        return label
+
+    def _apply_theme(self) -> None:
+        """(Re)apply all colour-bearing styles from the current theme tokens."""
+        tok = current_semantic_tokens()
+        for label, n, text in self._section_headers:
+            label.setText(
+                f'<span style="font-family:\'JetBrains Mono\',monospace;'
+                f'font-size:11px;font-weight:600;color:{tok.accent};">{n}</span>'
+                f'&nbsp;&nbsp;'
+                f'<span style="font-size:12px;font-weight:700;'
+                f'color:{tok.fg_primary};'
+                f'letter-spacing:0.6px;">{text.upper()}</span>'
+            )
+            label.setStyleSheet(
+                'QLabel { padding: 14px 0 8px 0;'
+                f' border-bottom: 1px solid {tok.border}; }}'
+            )
+        form_label_style = (
+            'QLabel { font-size: 10px; font-weight: 700;'
+            f' color: {tok.fg_muted};'
+            ' letter-spacing: 0.6px; padding: 0; background: transparent; }'
+        )
+        for label in self._form_labels:
+            label.setStyleSheet(form_label_style)
+
+    def restyle(self) -> None:
+        """Public hook: re-resolve theme tokens after a light/dark switch."""
+        self._apply_theme()
 
     def _save_and_accept(self) -> None:
         self._settings.setValue('cloud/api_base_url', self._api_edit.text().strip())

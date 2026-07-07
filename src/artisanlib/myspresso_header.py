@@ -24,6 +24,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from artisanlib.styles import current_semantic_tokens
+
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow
 
@@ -74,13 +76,13 @@ class MySpressoHeader(QFrame):
         self._nav_divider = QLabel()
         self._nav_divider.setFixedWidth(1)
         self._nav_divider.setFixedHeight(24)
-        self._nav_divider.setStyleSheet('background-color: #E8E3D6;')
         layout.addWidget(self._nav_divider)
         layout.addLayout(self._nav_slot)
 
         layout.addStretch()
 
         # ── Cloud connection badge ──────────────────────────────────────────
+        self._connected: bool = False
         self._cloud_badge = QLabel()
         self._cloud_badge.setObjectName('cloudBadge')
         self._cloud_badge.setTextFormat(Qt.TextFormat.RichText)
@@ -94,28 +96,19 @@ class MySpressoHeader(QFrame):
         # ── UI mode badge — square outlined card (MySpresso DA) ─────────────
         self._mode_badge = QLabel('·  MODE STANDARD')
         self._mode_badge.setObjectName('modeBadge')
-        self._mode_badge.setStyleSheet(
-            'QLabel#modeBadge {'
-            ' color: #4E4A44;'
-            ' background-color: #FFFFFF;'
-            ' border: 1px solid #D4CCBA;'
-            ' border-radius: 2px;'
-            ' padding: 3px 12px;'
-            ' font-size: 10px; font-weight: 700;'
-            ' letter-spacing: 0.05em;'
-            '}'
-        )
         self._mode_badge.setFixedHeight(22)
         layout.addWidget(self._mode_badge)
 
         # MySpresso DA: subtle drop shadow on both badges so they "lift" off
         # the warm header background (cards quasi-carrés + ombres subtiles).
+        # Colours are (re-)applied in _apply_theme().
+        self._badge_shadows: list[QGraphicsDropShadowEffect] = []
         for _badge in (self._cloud_badge, self._mode_badge):
             _shadow = QGraphicsDropShadowEffect(self)
             _shadow.setBlurRadius(8)
             _shadow.setOffset(0, 1)
-            _shadow.setColor(QColor(15, 30, 61, 36))  # navy.700 @ 14% alpha
             _badge.setGraphicsEffect(_shadow)
+            self._badge_shadows.append(_shadow)
 
         # ── Slot for re-parented action buttons (RESET/ON/DÉBUT) ────────────
         # Buttons are added via host_action_buttons() once the ApplicationWindow
@@ -128,6 +121,25 @@ class MySpressoHeader(QFrame):
         layout.addLayout(self._actions_layout)
 
         self._layout = layout
+        self._apply_theme()
+
+    # ── Theming ─────────────────────────────────────────────────────────────
+
+    def _apply_theme(self) -> None:
+        """(Re-)apply all colour-bearing styles from the semantic tokens."""
+        tok = current_semantic_tokens()
+        self._nav_divider.setStyleSheet(f'background-color: {tok.border};')
+        # Subtle badge lift: navy-tinted in light mode, plain black in dark
+        # (a coloured glow reads wrong on a dark ground).
+        shadow_colour = QColor(0, 0, 0, 70) if tok.dark else QColor(15, 30, 61, 28)
+        for _shadow in self._badge_shadows:
+            _shadow.setColor(shadow_colour)
+        # Re-render the cloud badge so the status dot picks up theme colours.
+        self.set_connected(self._connected)
+
+    def restyle(self) -> None:
+        """Public hook: re-resolve tokens after a light/dark switch."""
+        self._apply_theme()
 
     # ── Wiring helpers ──────────────────────────────────────────────────────
 
@@ -138,7 +150,9 @@ class MySpressoHeader(QFrame):
         (success-green / error-red) regardless of the badge's text colour —
         the v2 mockup shows a green dot next to navy-dark text.
         """
-        dot_colour = '#2DAE6D' if connected else '#A8392E'
+        self._connected = connected
+        tok = current_semantic_tokens()
+        dot_colour = tok.success_fg if connected else tok.accent
         label = 'CONNECTÉ' if connected else 'DÉCONNECTÉ'
         self._cloud_badge.setText(
             f'<span style="color:{dot_colour};">●</span>'

@@ -116,6 +116,53 @@ except Exception: # pylint: disable=broad-except
 _log: Final[logging.Logger] = logging.getLogger(__name__)
 
 
+# ── MySpresso graph palettes (from design tokens) ───────────────────────────
+# Two full default palettes so the chart follows the OS colour scheme.
+# Keys match the historical Artisan palette; values come from design_tokens.
+
+from artisanlib import design_tokens as _dt
+
+MYSPRESSO_GRAPH_PALETTE_LIGHT: Final[dict[str,str]] = {
+    'background':_dt.LIGHT_BG_RAISED,'grid':_dt.WARM_300,'ylabel':_dt.WARM_600,'xlabel':_dt.WARM_600,'title':_dt.NAVY_700,
+    'title_focus':_dt.RED_600,'title_hidden':_dt.WARM_500,
+    'rect1':_dt.WARM_300,'rect2':_dt.WARM_400,'rect3':_dt.WARM_200,'rect4':_dt.NAVY_100,'rect5':_dt.WARM_300,
+    'et':_dt.CHART_TE,'bt':_dt.CHART_BT,'xt':_dt.WARM_700,'yt':_dt.WARM_700,'deltaet':_dt.CHART_TE,
+    'deltabt':_dt.CHART_BT,'markers':_dt.NAVY_900,'text':_dt.NAVY_900,'watermarks':_dt.CHART_FC,'timeguide':_dt.NAVY_700,
+    'canvas':_dt.WARM_100,'legendbg':_dt.LIGHT_BG_RAISED,'legendborder':_dt.WARM_400,
+    'specialeventbox':_dt.RED_600,'specialeventtext':_dt.LIGHT_FG_ON_BRAND,
+    'bgeventmarker':_dt.WARM_600,'bgeventtext':_dt.NAVY_900,
+    'mettext':_dt.LIGHT_FG_ON_BRAND,'metbox':_dt.RED_600,
+    'aucguide':_dt.NAVY_700,'messages':_dt.NAVY_900,'aucarea':_dt.WARM_500,
+    'analysismask':_dt.WARM_500,'statsanalysisbkgnd':_dt.LIGHT_BG_RAISED}
+
+MYSPRESSO_GRAPH_PALETTE_DARK: Final[dict[str,str]] = {
+    'background':_dt.DARK_BG_RAISED,'grid':_dt.DARK_SURFACE_ALT,'ylabel':_dt.DARK_FG_SECONDARY,'xlabel':_dt.DARK_FG_SECONDARY,'title':_dt.DARK_FG_PRIMARY,
+    'title_focus':_dt.RED_300,'title_hidden':_dt.DARK_FG_MUTED,
+    'rect1':_dt.DARK_BORDER,'rect2':_dt.DARK_BORDER_STRONG,'rect3':_dt.DARK_SURFACE_ALT,'rect4':_dt.NAVY_600,'rect5':_dt.DARK_BORDER,
+    'et':_dt.RED_300,'bt':_dt.NAVY_200,'xt':_dt.DARK_FG_SECONDARY,'yt':_dt.DARK_FG_SECONDARY,'deltaet':_dt.RED_300,
+    'deltabt':_dt.NAVY_200,'markers':_dt.DARK_FG_PRIMARY,'text':_dt.DARK_FG_PRIMARY,'watermarks':_dt.CHART_FC,'timeguide':_dt.NAVY_200,
+    'canvas':_dt.DARK_BG,'legendbg':_dt.DARK_BG_RAISED,'legendborder':_dt.DARK_BORDER_STRONG,
+    'specialeventbox':_dt.RED_400,'specialeventtext':_dt.DARK_FG_ON_BRAND,
+    'bgeventmarker':_dt.DARK_FG_MUTED,'bgeventtext':_dt.DARK_FG_PRIMARY,
+    'mettext':_dt.DARK_FG_ON_BRAND,'metbox':_dt.RED_400,
+    'aucguide':_dt.NAVY_200,'messages':_dt.DARK_FG_PRIMARY,'aucarea':_dt.DARK_BORDER_STRONG,
+    'analysismask':_dt.DARK_BORDER_STRONG,'statsanalysisbkgnd':_dt.DARK_BG_RAISED}
+
+
+def myspresso_default_palette(dark:bool) -> dict[str,str]:
+    """A fresh copy of the fork's default graph palette for the theme."""
+    return dict(MYSPRESSO_GRAPH_PALETTE_DARK if dark else MYSPRESSO_GRAPH_PALETTE_LIGHT)
+
+
+def _current_scheme_is_dark() -> bool:
+    try:
+        from artisanlib.styles import is_dark_mode  # noqa: PLC0415 (avoids import at Qt-less import time)
+        app = QApplication.instance()
+        return isinstance(app, QApplication) and is_dark_mode(app)
+    except Exception: # pylint: disable=broad-except
+        return False
+
+
 
 type Interp1dKind = Literal['linear', 'nearest', 'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic', 'previous', 'next']
 
@@ -395,20 +442,11 @@ class tgraphcanvas(QObject):
         #default palette of colors
         self.locale_str:str = locale
         self.alpha:dict[str,float] = {'analysismask':0.4,'statsanalysisbkgnd':1.0,'legendbg':0.8}
-        # MySpresso fork: chart palette aligned to design tokens
-        # (CHART_TE / CHART_BT / CHART_DELTA from design_tokens.py, plus warm
-        # neutrals for the canvas chrome). See src/artisanlib/design_tokens.py.
-        self.palette:dict[str,str] = {'background':'#FFFFFF','grid':'#E8E3D6','ylabel':'#7A736A','xlabel':'#7A736A','title':'#0F1E3D',
-                        'title_focus':'#A8392E', 'title_hidden':'#A8A092',
-                        'rect1':'#E8E3D6','rect2':'#D4CCBA','rect3':'#F2EFE7','rect4':'#D0D8E4','rect5':'#E8E3D6',
-                        'et':'#A8392E','bt':'#0F1E3D','xt':'#4E4A44','yt':'#4E4A44','deltaet':'#A8392E',
-                        'deltabt':'#0F1E3D','markers':'#070D1F','text':'#070D1F','watermarks':'#C7873A','timeguide':'#0F1E3D',
-                        'canvas':'#FAF8F4','legendbg':'#FFFFFF','legendborder':'#D4CCBA',
-                        'specialeventbox':'#A8392E','specialeventtext':'#FFFFFF',
-                        'bgeventmarker':'#7A736A','bgeventtext':'#070D1F',
-                        'mettext':'#FFFFFF','metbox':'#A8392E',
-                        'aucguide':'#0F1E3D','messages':'#070D1F','aucarea':'#A8A092',
-                        'analysismask':'#A8A092','statsanalysisbkgnd':'#FFFFFF'}
+        # MySpresso fork: chart palette from design tokens, resolved for the
+        # current system colour scheme (light or dark). A saved user palette
+        # (Config >> Colors / themes) still overrides these defaults when the
+        # settings are loaded.
+        self.palette:dict[str,str] = myspresso_default_palette(_current_scheme_is_dark())
         self.palette1 = self.palette.copy()
         self.EvalueColor_default:Final[list[str]] = ['#43a7cf','#49b160','#800080','#ad0427']
         self.EvalueTextColor_default:Final[list[str]] = ['#ffffff','#ffffff','#ffffff','#ffffff']

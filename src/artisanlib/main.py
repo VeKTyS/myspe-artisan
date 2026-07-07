@@ -284,8 +284,27 @@ class Artisan(QtSingleApplication):
         def colorSchemeChanged(self, colorScheme:'Qt.ColorScheme') -> None:
             aw:ApplicationWindow|None = self.activationWindow()
             if aw is not None and self.darkmode != bool(colorScheme == Qt.ColorScheme.Dark):
+                was_dark = self.darkmode
                 self.darkmode = bool(colorScheme == Qt.ColorScheme.Dark)
-#                aw.updateCanvasColors()
+                # MySpresso: follow the OS scheme live — re-resolve the QSS
+                # theme property, restyle the code-styled fork widgets, and
+                # (only if the user never customised it) swap the chart palette
+                try:
+                    from artisanlib.styles import apply_myspresso_stylesheet  # noqa: PLC0415
+                    apply_myspresso_stylesheet(self)
+                    for _wname in ('myspresso_header', 'myspresso_hero',
+                                   'myspresso_pilot', 'myspresso_eventlog',
+                                   'myspresso_stats'):
+                        _w = getattr(aw, _wname, None)
+                        if _w is not None and hasattr(_w, 'restyle'):
+                            _w.restyle()
+                    from artisanlib.canvas import myspresso_default_palette  # noqa: PLC0415
+                    _prev_default = myspresso_default_palette(was_dark)
+                    if all(aw.qmc.palette.get(_k) == _v for _k, _v in _prev_default.items()):
+                        aw.qmc.palette.update(myspresso_default_palette(self.darkmode))
+                        aw.updateCanvasColors()
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
                 QTimer.singleShot(500, aw.updateScheduleSignal.emit) # only redraw scheduler window # to adjust the colors of its items (QWidgets are updated automatically)
     except Exception: # pylint: disable=broad-except
         pass

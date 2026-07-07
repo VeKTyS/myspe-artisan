@@ -26,6 +26,8 @@ import re
 
 from PyQt6.QtWidgets import QApplication
 
+from artisanlib import design_tokens
+
 _log = logging.getLogger(__name__)
 
 _QSS_PATH = pathlib.Path(__file__).parent / 'myspresso.qss'
@@ -88,7 +90,6 @@ _TOKEN_RE = re.compile(r'@([A-Z][A-Z0-9_]*)@')
 
 def _token_values() -> dict[str, str]:
     """All string tokens exported by design_tokens, keyed by name."""
-    from artisanlib import design_tokens
     return {
         name: value
         for name in dir(design_tokens)
@@ -139,6 +140,17 @@ def is_dark_mode(app: QApplication) -> bool:
         return bool(scheme == Qt.ColorScheme.Dark)
     except (AttributeError, ImportError):
         return False
+
+
+def current_semantic_tokens() -> design_tokens.SemanticTokens:
+    """SemanticTokens resolved for the current system colour scheme.
+
+    Widgets that style themselves in code call this instead of
+    hardcoding light hex values, which makes them dark-mode aware.
+    """
+    app = QApplication.instance()
+    dark = isinstance(app, QApplication) and is_dark_mode(app)
+    return design_tokens.semantic(dark)
 
 
 def apply_myspresso_stylesheet(app: QApplication) -> None:

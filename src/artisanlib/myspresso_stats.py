@@ -22,6 +22,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from artisanlib.styles import current_semantic_tokens
+
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow
 
@@ -48,15 +50,36 @@ class MySpressoStatsStrip(QFrame):
         # we can mix muted labels with bold tabular values inline.
         self._line = QLabel('—')
         self._line.setTextFormat(Qt.TextFormat.RichText)
-        self._line.setStyleSheet(
-            'font-family: "JetBrains Mono"; font-size: 12px; color: #7A736A;'
-        )
         root.addWidget(self._line)
 
         self._aw: ApplicationWindow | None = None
         self._refresh = QTimer(self)
         self._refresh.setInterval(500)
         self._refresh.timeout.connect(self._refresh_stats)
+
+        # Theme-resolved colours consumed by the rich-text refresh loop.
+        self._c_label = ''
+        self._c_value = ''
+        self._c_dimmed = ''
+        self._apply_theme()
+
+    # ── Theming ─────────────────────────────────────────────────────────────
+    def _apply_theme(self) -> None:
+        """(Re)apply all colour-bearing styles from the current theme tokens."""
+        tok = current_semantic_tokens()
+        self._c_label = tok.fg_muted
+        self._c_value = tok.fg_primary
+        self._c_dimmed = tok.fg_muted
+        self._line.setStyleSheet(
+            f'font-family: "JetBrains Mono"; font-size: 12px; color: {tok.fg_muted};'
+        )
+        # Rebuild the rich-text line so inline colours pick up the new theme
+        # immediately instead of waiting for the next 500 ms tick.
+        self._refresh_stats()
+
+    def restyle(self) -> None:
+        """Public hook: re-resolve theme tokens after a light/dark switch."""
+        self._apply_theme()
 
     def wire(self, app_window: ApplicationWindow) -> None:
         self._aw = app_window
@@ -88,9 +111,9 @@ class MySpressoStatsStrip(QFrame):
                         else '').strip() or ['Air', 'Burner', 'Drum', 'Fan'][i]
                 value = self._fmt_value(i, int(values[i])) if i < len(values) else '—'
                 dimmed = i < len(visible) and not bool(visible[i])
-                colour = '#A8A092' if dimmed else '#070D1F'
+                colour = self._c_dimmed if dimmed else self._c_value
                 parts.append(
-                    f'<span style="color:#7A736A;">{name}</span>'
+                    f'<span style="color:{self._c_label};">{name}</span>'
                     f'&nbsp;<b style="color:{colour};">{value}</b>'
                 )
             self._line.setText(' &nbsp;·&nbsp; '.join(parts))
