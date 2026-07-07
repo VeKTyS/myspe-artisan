@@ -76,22 +76,6 @@ class MySpressoPilotColumn(QFrame):
         root.setContentsMargins(16, 20, 16, 16)
         root.setSpacing(0)
 
-        # ── Native Artisan LCD panel slot (ET / BT / Δ BT …) ────────────────
-        # The native lcdFrame is reparented here by main.py via set_native_lcds
-        # when the user enables "Readings" (Ctrl+L). It owns ET/BT/RoR with the
-        # familiar seven-segment look + tare / curve-toggle interactions.
-        self._native_slot = QVBoxLayout()
-        self._native_slot.setContentsMargins(0, 0, 0, 0)
-        self._native_slot.setSpacing(0)
-        root.addLayout(self._native_slot)
-        self._native_divider = self._divider()
-        self._native_divider.setVisible(False)
-        root.addWidget(self._native_divider)
-        self._native_gap = QWidget()
-        self._native_gap.setFixedHeight(14)
-        self._native_gap.setVisible(False)
-        root.addWidget(self._native_gap)
-
         # ── Styled readouts (mockup pilot column) ───────────────────────────
         #   BT · GRAIN   196.8 °C   (big, chart-navy)
         #   ET · AIR     212.4 °C   (big, chart-red)
@@ -135,6 +119,24 @@ class MySpressoPilotColumn(QFrame):
         self._styled_block = QWidget()
         self._styled_block.setLayout(styled)
         root.addWidget(self._styled_block)
+
+        # ── Native Artisan LCD panel slot (TIME / ET / BT tiles + extras) ───
+        # The native lcdFrame is reparented here by main.py via
+        # set_native_lcds; its visibility keeps following Artisan's Readings
+        # toggle (showLCDs/hideLCDs → set_native_mode). It renders as mockup
+        # tiles (ValueTile + curve-coloured stripe), BELOW the big readouts.
+        self._native_divider = self._divider()
+        self._native_divider.setVisible(False)
+        root.addSpacing(12)
+        root.addWidget(self._native_divider)
+        self._native_gap = QWidget()
+        self._native_gap.setFixedHeight(10)
+        self._native_gap.setVisible(False)
+        root.addWidget(self._native_gap)
+        self._native_slot = QVBoxLayout()
+        self._native_slot.setContentsMargins(0, 0, 0, 0)
+        self._native_slot.setSpacing(0)
+        root.addLayout(self._native_slot)
 
         root.addStretch()
 
@@ -268,30 +270,25 @@ class MySpressoPilotColumn(QFrame):
         self._refresh.start()
 
     def set_native_lcds(self, lcd_frame: QWidget) -> None:
-        """Host (and keep hidden) the native Artisan LCD panel.
-
-        Mockup design: the styled BT/ET/ΔBT readouts are THE canonical
-        display of this column. The native panel is still re-parented here
-        so it has a sane parent and its LCDs keep receiving values (the
-        Large LCD windows and all display() call-sites are unaffected) —
-        it just never competes visually with the styled block."""
+        """Re-parent the native Artisan LCD tile panel below the styled
+        readouts. Its visibility keeps following Artisan's Readings toggle
+        (showLCDs/hideLCDs → set_native_mode); the styled BT/ET block always
+        stays visible (it is the mockup's canonical display)."""
         from PyQt6.QtWidgets import QSizePolicy
         lcd_frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self._native_slot.addWidget(lcd_frame)
         self._native_frame: QWidget | None = lcd_frame
-        lcd_frame.setVisible(False)
-        self.set_native_mode(False)
+        self.set_native_mode(lcd_frame.isVisible())
 
     def set_native_mode(self, native_on: bool) -> None:
-        """Mockup design: the styled readouts always win — the hosted native
-        panel stays hidden whatever Artisan's Readings toggle does."""
-        del native_on
+        """Mirror Artisan's Readings toggle onto the hosted LCD panel; the
+        styled readouts remain visible in both states."""
         native_frame = getattr(self, '_native_frame', None)
         if native_frame is not None:
-            native_frame.setVisible(False)
+            native_frame.setVisible(native_on)
         self._styled_block.setVisible(True)
-        self._native_divider.setVisible(False)
-        self._native_gap.setVisible(False)
+        self._native_divider.setVisible(native_on)
+        self._native_gap.setVisible(native_on)
 
     def update_cursor(self, raw_message: str) -> None:
         """Display the matplotlib cursor temperature / RoR in the column.

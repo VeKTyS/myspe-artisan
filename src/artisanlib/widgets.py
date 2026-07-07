@@ -331,7 +331,8 @@ class MyQLCDNumber(QLabel):
         super().__init__(parent)
         self._lcd_value: float = 0.0
         self._digit_count: int = 5
-        self.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        # mockup tiles read left-aligned (label above, value under it)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         font = QFont('JetBrains Mono')
         font.setStyleHint(QFont.StyleHint.Monospace)
         font.setWeight(QFont.Weight.DemiBold)

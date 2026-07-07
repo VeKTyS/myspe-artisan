@@ -32,23 +32,23 @@ def myspresso_default_lcdpalettes(dark:bool) -> tuple[dict[str,str], dict[str,st
     The light values MUST stay byte-identical to the historical defaults so
     that 'saved settings == light defaults' detection keeps working.
     """
+    # Mockup LCD tiles: quiet card ground, VALUE in the curve colour (no
+    # filled chip), coloured left stripe added by myspressoApplyMainLCDStyles.
     if dark:
-        b = {'timer':design_tokens.DARK_BG_RAISED, 'et':design_tokens.RED_600,
-             'bt':design_tokens.NAVY_600, 'deltaet':design_tokens.DARK_SURFACE_ALT,
-             'deltabt':design_tokens.DARK_SURFACE_ALT, 'sv':design_tokens.DARK_BG_RAISED,
-             'rstimer':design_tokens.DARK_BG_RAISED, 'slowcoolingtimer':design_tokens.DARK_BG_RAISED}
-        f = {'timer':design_tokens.DARK_FG_PRIMARY, 'et':'#FFFFFF',
-             'bt':'#FFFFFF', 'deltaet':design_tokens.RED_300,
+        tile = design_tokens.DARK_SURFACE_ALT
+        b = {'timer':tile, 'et':tile, 'bt':tile, 'deltaet':tile, 'deltabt':tile,
+             'sv':tile, 'rstimer':tile, 'slowcoolingtimer':tile}
+        f = {'timer':design_tokens.DARK_FG_PRIMARY, 'et':design_tokens.RED_300,
+             'bt':design_tokens.NAVY_200, 'deltaet':design_tokens.RED_300,
              'deltabt':design_tokens.NAVY_200, 'sv':design_tokens.DARK_FG_SECONDARY,
              'rstimer':design_tokens.NAVY_200, 'slowcoolingtimer':design_tokens.RED_300}
     else:
-        b = {'timer':design_tokens.WARM_100, 'et':design_tokens.RED_600,
-             'bt':design_tokens.NAVY_700, 'deltaet':design_tokens.WARM_200,
-             'deltabt':design_tokens.WARM_200, 'sv':design_tokens.WARM_100,
-             'rstimer':design_tokens.WARM_100, 'slowcoolingtimer':design_tokens.WARM_100}
-        f = {'timer':design_tokens.NAVY_900, 'et':'#FFFFFF',
-             'bt':'#FFFFFF', 'deltaet':design_tokens.RED_600,
-             'deltabt':design_tokens.NAVY_700, 'sv':design_tokens.WARM_700,
+        tile = design_tokens.LIGHT_BG_RAISED
+        b = {'timer':tile, 'et':tile, 'bt':tile, 'deltaet':tile, 'deltabt':tile,
+             'sv':tile, 'rstimer':tile, 'slowcoolingtimer':tile}
+        f = {'timer':design_tokens.NAVY_900, 'et':design_tokens.CHART_TE,
+             'bt':design_tokens.CHART_BT, 'deltaet':design_tokens.CHART_TE,
+             'deltabt':design_tokens.CHART_BT, 'sv':design_tokens.WARM_700,
              'rstimer':design_tokens.NAVY_700, 'slowcoolingtimer':design_tokens.RED_600}
     return b, f
 
@@ -4489,6 +4489,12 @@ class ApplicationWindow(QMainWindow):
         except Exception as _e:  # pylint: disable=broad-except
             _log.exception(_e)
 
+        # MySpresso: mockup tile treatment for the LCDs (stripes, borders)
+        try:
+            self.myspressoApplyMainLCDStyles()
+        except Exception as _e: # pylint: disable=broad-except
+            _log.exception(_e)
+
         self.displayonlymenus() # enable/disable menu items as needed
 
         if self.qmc.mode == 'C':
@@ -6860,11 +6866,22 @@ class ApplicationWindow(QMainWindow):
 
     def myspressoApplyMainLCDStyles(self) -> None:
         """(Re-)apply the main/extra/phase LCD styles from the current
-        palettes and theme tokens. Called when the OS colour scheme flips."""
+        palettes and theme tokens (mockup tiles: quiet card, curve-coloured
+        value, coloured left stripe on ET/BT/Δ). Called at startup after the
+        settings load and when the OS colour scheme flips."""
+        tok = current_semantic_tokens()
         for lcd, key in ((self.lcd1,'timer'), (self.lcd2,'et'), (self.lcd3,'bt'),
                          (self.lcd4,'deltaet'), (self.lcd5,'deltabt'),
                          (self.lcd6,'sv'), (self.lcd7,'sv')):
-            lcd.setStyleSheet(f"QLCDNumber {{ border-radius: 4; color: {rgba_colorname2argb_colorname(self.lcdpaletteF[key])}; background-color: {rgba_colorname2argb_colorname(self.lcdpaletteB[key])};}}")
+            fg = rgba_colorname2argb_colorname(self.lcdpaletteF[key])
+            bg = rgba_colorname2argb_colorname(self.lcdpaletteB[key])
+            stripe = (f' border-left: 3px solid {fg};'
+                      if key in ('et', 'bt', 'deltaet', 'deltabt') else
+                      f' border-left: 3px solid {tok.border};')
+            lcd.setStyleSheet(
+                f'QLCDNumber {{ border-radius: 4; color: {fg};'
+                f' background-color: {bg};'
+                f' border: 1px solid {tok.border};{stripe}}}')
         for i, _ in enumerate(self.extraLCD1):
             self.extraLCD1[i].setStyleSheet(f"QLCDNumber {{ border-radius: 4; color: {rgba_colorname2argb_colorname(self.lcdpaletteF['sv'])}; background-color: {rgba_colorname2argb_colorname(self.lcdpaletteB['sv'])};}}")
         for i, _ in enumerate(self.extraLCD2):
@@ -18961,6 +18978,9 @@ class ApplicationWindow(QMainWindow):
             self.lcd5.setStyleSheet(f"QLCDNumber {{ border-radius:4; color: {rgba_colorname2argb_colorname(self.lcdpaletteF['deltabt'])}; background: {rgba_colorname2argb_colorname(self.lcdpaletteB['deltabt'])};}}")
             self.lcd6.setStyleSheet(f"QLCDNumber {{ border-radius:4; color: {rgba_colorname2argb_colorname(self.lcdpaletteF['sv'])}; background: {rgba_colorname2argb_colorname(self.lcdpaletteB['sv'])};}}")
             self.lcd7.setStyleSheet(f"QLCDNumber {{ border-radius:4; color: {rgba_colorname2argb_colorname(self.lcdpaletteF['sv'])}; background: {rgba_colorname2argb_colorname(self.lcdpaletteB['sv'])};}}")
+            # MySpresso: re-apply the mockup tile treatment (stripes, borders)
+            # on top of the palette-driven styles restored above
+            self.myspressoApplyMainLCDStyles()
             self.readingslcdsflags = [toInt(x) for x in toList(settings.value('readingslcdsflags',self.readingslcdsflags))]
             self.controlsflags = [toInt(x) for x in toList(settings.value('controlsflags',self.controlsflags))]
             #restore flavors
