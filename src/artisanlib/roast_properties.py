@@ -47,6 +47,7 @@ from artisanlib.util import (deltaLabelUTF8, stringfromseconds,stringtoseconds, 
         convertWeight, convertVolume, float2str)
 from artisanlib.dialogs import ArtisanDialog, ArtisanResizeablDialog, tareDlg
 from artisanlib.widgets import MyQComboBox, ClickableQLabel, ClickableTextEdit, MyTableWidgetItemNumber
+from artisanlib.styles import current_semantic_tokens
 
 
 from uic import EnergyWidget # pyright: ignore[attr-defined] # pylint: disable=no-name-in-module
@@ -71,18 +72,19 @@ def _make_roast_section(n: str, text: str) -> QLabel:
     """Numbered section header — red mono N + uppercase navy title + warm
     bottom divider. Matches the SectionHeader component in the Claude
     Design handoff (dialogs.jsx)."""
+    tok = current_semantic_tokens()
     label = QLabel()
     label.setTextFormat(Qt.TextFormat.RichText)
     label.setText(
         f'<span style="font-family:\'JetBrains Mono\',monospace;'
-        f'font-size:11px;font-weight:600;color:#A8392E;">{n}</span>'
+        f'font-size:11px;font-weight:600;color:{tok.accent};">{n}</span>'
         f'&nbsp;&nbsp;'
-        f'<span style="font-size:12px;font-weight:700;color:#070D1F;'
+        f'<span style="font-size:12px;font-weight:700;color:{tok.fg_primary};'
         f'letter-spacing:0.6px;">{text.upper()}</span>'
     )
     label.setStyleSheet(
         'QLabel { padding: 14px 0 8px 0;'
-        ' border-bottom: 1px solid #E8E3D6;'
+        f' border-bottom: 1px solid {tok.border};'
         ' background: transparent; }'
     )
     return label
@@ -92,9 +94,10 @@ def _field_label(text: str) -> QLabel:
     """Left-side form label in the Roast Properties grid — navy bold 13px,
     matches the "Date / Titre / Stock / Grains / Poids / …" column in the
     mockup."""
+    tok = current_semantic_tokens()
     label = QLabel(text)
     label.setStyleSheet(
-        'QLabel { font-size: 13px; font-weight: 700; color: #070D1F;'
+        f'QLabel {{ font-size: 13px; font-weight: 700; color: {tok.fg_primary};'
         ' background: transparent; padding-right: 12px; }'
     )
     label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -104,9 +107,10 @@ def _field_label(text: str) -> QLabel:
 def _col_header(text: str) -> QLabel:
     """Small uppercase red column header — VERT / TORRÉFIÉ / ENTIER / MOULU
     / HUMIDITÉ / TEMPÉRATURE / PRESSION."""
+    tok = current_semantic_tokens()
     label = QLabel(text.upper())
     label.setStyleSheet(
-        'QLabel { font-size: 10px; font-weight: 700; color: #A8392E;'
+        f'QLabel {{ font-size: 10px; font-weight: 700; color: {tok.accent};'
         ' letter-spacing: 0.8px; background: transparent; }'
     )
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -116,11 +120,12 @@ def _col_header(text: str) -> QLabel:
 def _suffix_tile(text: str) -> QLabel:
     """Warm-bg suffix tile placed at the right of a numeric input — shows
     units like kg / g/l / % / l / °C / hPa / /64" / agtron."""
+    tok = current_semantic_tokens()
     label = QLabel(text)
     label.setStyleSheet(
-        'QLabel { font-size: 12px; color: #4E4A44;'
-        ' background-color: #F2EFE7;'
-        ' border: 1px solid #E8E3D6; border-radius: 2px;'
+        f'QLabel {{ font-size: 12px; color: {tok.fg_secondary};'
+        f' background-color: {tok.surface_alt};'
+        f' border: 1px solid {tok.border}; border-radius: 2px;'
         ' padding: 4px 10px; min-width: 28px; }'
     )
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -131,11 +136,12 @@ def _readonly_pill(text: str) -> QLabel:
     """Warm-bg readonly value pill — used for the Date field which is
     computed-only, no user input. Matches the wider warm box shown for
     Date in the mockup."""
+    tok = current_semantic_tokens()
     label = QLabel(text)
     label.setStyleSheet(
-        'QLabel { font-size: 13px; color: #070D1F; font-weight: 500;'
-        ' background-color: #F2EFE7;'
-        ' border: 1px solid #E8E3D6; border-radius: 2px;'
+        f'QLabel {{ font-size: 13px; color: {tok.fg_primary}; font-weight: 500;'
+        f' background-color: {tok.surface_alt};'
+        f' border: 1px solid {tok.border}; border-radius: 2px;'
         ' padding: 6px 12px; }'
     )
     label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -159,11 +165,12 @@ def _wrap_input_with_suffix(input_widget: QWidget, suffix: str) -> QWidget:
 def _dashed_placeholder(glyph: str = '◇') -> QLabel:
     """Diamond glyph in a dashed-border tile — represents the "Défauts Vert"
     column in the mockup (no input there, just a placeholder marker)."""
+    tok = current_semantic_tokens()
     label = QLabel(glyph)
     label.setStyleSheet(
-        'QLabel { font-size: 14px; color: #A8A092;'
+        f'QLabel {{ font-size: 14px; color: {tok.fg_muted};'
         ' background-color: transparent;'
-        ' border: 1px dashed #D4CCBA; border-radius: 2px;'
+        f' border: 1px dashed {tok.border_strong}; border-radius: 2px;'
         ' padding: 6px 12px; }'
     )
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -177,13 +184,14 @@ def _small_pm_button(text: str) -> QPushButton:
     btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
     btn.setFixedWidth(40)
+    tok = current_semantic_tokens()
     btn.setStyleSheet(
-        'QPushButton { background-color: #FFFFFF; color: #070D1F;'
-        ' border: 1px solid #D4CCBA; border-radius: 2px;'
+        f'QPushButton {{ background-color: {tok.bg_raised}; color: {tok.fg_primary};'
+        f' border: 1px solid {tok.border_strong}; border-radius: 2px;'
         ' font-size: 14px; font-weight: 600;'
         ' padding: 6px 0px; min-width: 40px; }'
-        'QPushButton:hover { background-color: #FAF8F4; }'
-        'QPushButton:pressed { background-color: #F2EFE7; }'
+        f'QPushButton:hover {{ background-color: {tok.bg}; }}'
+        f'QPushButton:pressed {{ background-color: {tok.bg_sunken}; }}'
     )
     return btn
 
@@ -710,6 +718,8 @@ class editGraphDlg(ArtisanResizeablDialog):
     def __init__(self, parent:QWidget, aw:'ApplicationWindow', activeTab:int = 0, start_recording_on_exit:bool = False) -> None:
         super().__init__(parent, aw)
 
+        tok = current_semantic_tokens()
+
         self.start_recording_on_exit = start_recording_on_exit
 
         self.ETname = self.aw.qmc.device_name_subst(self.aw.ETname)
@@ -1002,11 +1012,11 @@ class editGraphDlg(ArtisanResizeablDialog):
         # white background, navy text — and let the global QSS handle the
         # rest (focus border, dark-mode override).
         self.titleedit.setStyleSheet(
-            'QComboBox { background-color: #FFFFFF; color: #070D1F;'
+            f'QComboBox {{ background-color: {tok.bg_raised}; color: {tok.fg_primary};'
             ' padding-left: 8px; padding-right: 8px; padding-top: 4px;'
             ' padding-bottom: 4px; font-weight: 600; }'
             'QComboBox QAbstractItemView { font-weight: normal;'
-            ' background-color: #FFFFFF; color: #070D1F; }'
+            f' background-color: {tok.bg_raised}; color: {tok.fg_primary}; }}'
         )
         self.titleedit.setView(QListView())
         self.titleShowAlwaysFlag = QCheckBox(QApplication.translate('CheckBox','Show Always'))
@@ -1860,8 +1870,8 @@ class editGraphDlg(ArtisanResizeablDialog):
         _ms_header = QFrame()
         _ms_header.setObjectName('MysDialogHeader')
         _ms_header.setStyleSheet(
-            '#MysDialogHeader { background-color: #FFFFFF;'
-            ' border-bottom: 1px solid #E8E3D6; padding: 0px; }'
+            f'#MysDialogHeader {{ background-color: {tok.bg_raised};'
+            f' border-bottom: 1px solid {tok.border}; padding: 0px; }}'
         )
         _ms_header_layout = QHBoxLayout(_ms_header)
         _ms_header_layout.setContentsMargins(20, 16, 20, 16)
@@ -2922,6 +2932,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         top-level windows once `plus_account` is set. We hide / reparent
         them defensively at the bottom of this method.
         """
+        tok = current_semantic_tokens()
         # ── 01 · IDENTIFICATION ────────────────────────────────────────────
         root.addWidget(_make_roast_section('01', 'Identification'))
 
@@ -2936,9 +2947,9 @@ class editGraphDlg(ArtisanResizeablDialog):
         id_grid.addWidget(_field_label(QApplication.translate('Label', 'Date')), 0, 0)
         if self._mys_dateedit_ref is not None:
             self._mys_dateedit_ref.setStyleSheet(
-                'QLabel { font-size: 13px; color: #070D1F; font-weight: 500;'
-                ' background-color: #F2EFE7;'
-                ' border: 1px solid #E8E3D6; border-radius: 2px;'
+                f'QLabel {{ font-size: 13px; color: {tok.fg_primary}; font-weight: 500;'
+                f' background-color: {tok.surface_alt};'
+                f' border: 1px solid {tok.border}; border-radius: 2px;'
                 ' padding: 6px 12px; }'
             )
             id_grid.addWidget(self._mys_dateedit_ref, 0, 1, 1, 2)
@@ -2957,9 +2968,9 @@ class editGraphDlg(ArtisanResizeablDialog):
         elif hasattr(self, 'batchedit'):
             # Fallback: use the existing batchedit (ClickableQLabel)
             self.batchedit.setStyleSheet(
-                'QLabel { font-size: 13px; color: #070D1F; font-weight: 500;'
-                ' background-color: #F2EFE7;'
-                ' border: 1px solid #E8E3D6; border-radius: 2px;'
+                f'QLabel {{ font-size: 13px; color: {tok.fg_primary}; font-weight: 500;'
+                f' background-color: {tok.surface_alt};'
+                f' border: 1px solid {tok.border}; border-radius: 2px;'
                 ' padding: 6px 12px; }'
             )
             id_grid.addWidget(self.batchedit, 0, 4)
@@ -2997,11 +3008,11 @@ class editGraphDlg(ArtisanResizeablDialog):
                 sh.addWidget(self.plus_blends_combo, 1)
             if hasattr(self, 'plus_custom_blend_button'):
                 self.plus_custom_blend_button.setStyleSheet(
-                    'QToolButton { background-color: #FFFFFF;'
-                    ' color: #070D1F; border: 1px solid #D4CCBA;'
+                    f'QToolButton {{ background-color: {tok.bg_raised};'
+                    f' color: {tok.fg_primary}; border: 1px solid {tok.border_strong};'
                     ' border-radius: 2px; padding: 4px 10px;'
                     ' min-width: 28px; font-size: 13px; }'
-                    'QToolButton:hover { background-color: #FAF8F4; }'
+                    f'QToolButton:hover {{ background-color: {tok.bg}; }}'
                 )
                 sh.addWidget(self.plus_custom_blend_button)
             id_grid.addWidget(stock_box, 2, 1, 1, 2)
@@ -3039,7 +3050,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         pg.addWidget(self.weightoutedit, 1, 2)
         pg.addWidget(self.unitsComboBox, 1, 3)
         self.bag_count_label.setStyleSheet(
-            'QLabel { font-size: 12px; color: #4E4A44;'
+            f'QLabel {{ font-size: 12px; color: {tok.fg_secondary};'
             ' background: transparent; padding-left: 8px; }'
         )
         pg.addWidget(self.bag_count_label, 1, 4)
@@ -3050,9 +3061,9 @@ class editGraphDlg(ArtisanResizeablDialog):
         pg.addWidget(self.weightoutdefectsedit, 2, 2)
         if hasattr(self, 'weightoutdefects_unit_label'):
             self.weightoutdefects_unit_label.setStyleSheet(
-                'QLabel { font-size: 12px; color: #4E4A44;'
-                ' background-color: #F2EFE7;'
-                ' border: 1px solid #E8E3D6; border-radius: 2px;'
+                f'QLabel {{ font-size: 12px; color: {tok.fg_secondary};'
+                f' background-color: {tok.surface_alt};'
+                f' border: 1px solid {tok.border}; border-radius: 2px;'
                 ' padding: 4px 10px; min-width: 28px; }'
             )
             self.weightoutdefects_unit_label.setAlignment(
@@ -3067,7 +3078,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         pg.addWidget(self.volumeUnitsComboBox, 3, 3)
         if hasattr(self, 'volumepercentlabel'):
             self.volumepercentlabel.setStyleSheet(
-                'QLabel { font-size: 12px; color: #7A736A;'
+                f'QLabel {{ font-size: 12px; color: {tok.fg_muted};'
                 ' background: transparent; padding: 0 8px; }'
             )
 
@@ -3156,12 +3167,12 @@ class editGraphDlg(ArtisanResizeablDialog):
                 '↻  ' + QApplication.translate('Button', 'update').upper(),
             )
             self._mys_updateAmbientTemp_ref.setStyleSheet(
-                'QPushButton { background-color: #FFFFFF; color: #070D1F;'
-                ' border: 1px solid #D4CCBA; border-radius: 2px;'
+                f'QPushButton {{ background-color: {tok.bg_raised}; color: {tok.fg_primary};'
+                f' border: 1px solid {tok.border_strong}; border-radius: 2px;'
                 ' padding: 6px 14px; font-weight: 600;'
                 ' letter-spacing: 0.5px; }'
-                'QPushButton:hover { background-color: #FAF8F4; }'
-                'QPushButton:pressed { background-color: #F2EFE7; }'
+                f'QPushButton:hover {{ background-color: {tok.bg}; }}'
+                f'QPushButton:pressed {{ background-color: {tok.bg_sunken}; }}'
             )
             amb.addWidget(self._mys_updateAmbientTemp_ref, 1, 4)
 

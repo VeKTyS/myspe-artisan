@@ -108,20 +108,13 @@ class MySpressoHeroPanel(QFrame):
         self._timer_label.setFont(f_timer)
         self._timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Temperature echo under the timer (the authoritative, large readout
-        # lives in the right pilot column; this is a glanceable duplicate next
-        # to the clock so the top bar carries profil + temps + température).
-        self._temp_label = QLabel('—.- °F BT')
-        f_temp = QFont('JetBrains Mono')
-        f_temp.setStyleHint(QFont.StyleHint.Monospace)
-        f_temp.setPixelSize(17)
-        f_temp.setWeight(QFont.Weight.Medium)
-        self._temp_label.setFont(f_temp)
-        self._temp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Caption under the clock, per the mockup ("TEMPS DE TORRÉFACTION").
+        self._timer_caption = QLabel('TEMPS DE TORRÉFACTION')
+        self._timer_caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         timer_block.addStretch()
         timer_block.addWidget(self._timer_label)
-        timer_block.addWidget(self._temp_label)
+        timer_block.addWidget(self._timer_caption)
         timer_block.addStretch()
 
         timer_w = QWidget()
@@ -131,10 +124,36 @@ class MySpressoHeroPanel(QFrame):
         # current theme's border token) in _apply_theme().
         self._timer_w = timer_w
 
-        # Meta panel (MAGASIN / CHARGE / Δ T° / DEV. RATIO) removed: the
-        # piloting indicators now live in the right-hand MySpressoPilotColumn.
+        # ── ET / BT echo (right, per the mockup) ────────────────────────────
+        def _echo(unit_label: str) -> tuple[QLabel, QLabel, QVBoxLayout]:
+            value = QLabel('—.-°')
+            f_echo = QFont('JetBrains Mono')
+            f_echo.setStyleHint(QFont.StyleHint.Monospace)
+            f_echo.setPixelSize(21)
+            f_echo.setWeight(QFont.Weight.Medium)
+            value.setFont(f_echo)
+            value.setAlignment(Qt.AlignmentFlag.AlignRight)
+            caption = QLabel(unit_label)
+            caption.setAlignment(Qt.AlignmentFlag.AlignRight)
+            box = QVBoxLayout()
+            box.setSpacing(1)
+            box.addStretch()
+            box.addWidget(value)
+            box.addWidget(caption)
+            box.addStretch()
+            return value, caption, box
 
-        # ── Outer layout: title (left) + timer (centre) ─────────────────────
+        self._echo_et, self._echo_et_cap, et_box = _echo('ET')
+        self._echo_bt, self._echo_bt_cap, bt_box = _echo('BT')
+        echo_row = QHBoxLayout()
+        echo_row.setSpacing(22)
+        echo_row.addStretch()
+        echo_row.addLayout(et_box)
+        echo_row.addLayout(bt_box)
+        echo_w = QWidget()
+        echo_w.setLayout(echo_row)
+
+        # ── Outer layout: title (left) + timer (centre) + echo (right) ──────
         # Phase LCDs are NOT here — they live in their own resizable splitter
         # pane below the hero (independent of this bar).
         root = QHBoxLayout(self)
@@ -142,9 +161,7 @@ class MySpressoHeroPanel(QFrame):
         root.setSpacing(24)
         root.addWidget(title_w, 3)
         root.addWidget(timer_w, 4)
-        # Right spacer keeps the timer visually centred now that the meta
-        # panel is gone (title block on the left is wider than empty right).
-        root.addStretch(3)
+        root.addWidget(echo_w, 3)
 
         # Refresh timer
         self._aw: ApplicationWindow | None = None
@@ -173,9 +190,19 @@ class MySpressoHeroPanel(QFrame):
             f' color: {tok.fg_muted};'
         )
         self._timer_label.setStyleSheet(f'color: {tok.fg_primary};')
-        # Red accent echo of the BT temperature (mockup shows it in the warm
-        # accent red, not the navy BT chart colour).
-        self._temp_label.setStyleSheet(f'color: {tok.accent};')
+        self._timer_caption.setStyleSheet(
+            'font-size: 10px; font-weight: 600; letter-spacing: 1.5px;'
+            f' color: {tok.fg_muted};'
+        )
+        # ET / BT echoes take their curve colours, captions muted (mockup).
+        self._echo_et.setStyleSheet(f'color: {tok.chart_et};')
+        self._echo_bt.setStyleSheet(f'color: {tok.chart_bt};')
+        caption_style = (
+            'font-size: 9px; font-weight: 700; letter-spacing: 1.5px;'
+            f' color: {tok.fg_muted};'
+        )
+        self._echo_et_cap.setStyleSheet(caption_style)
+        self._echo_bt_cap.setStyleSheet(caption_style)
         # v2 design: thin warm dividers framing the timer hero block.
         # Scope to objectName so descendants (QLabel) don't inherit borders.
         self._timer_w.setStyleSheet(
@@ -227,11 +254,10 @@ class MySpressoHeroPanel(QFrame):
         # Line 2 — "{channel} {ys}°{mode}" — echo temperature (skip RoR lines).
         second = lines[1]
         if '°' in second and '/min' not in second:
-            head, _, tail = second.rpartition('°')
+            head, _, _tail = second.rpartition('°')
             parts = head.split()
             temp_val = parts[-1] if parts else head.strip()
-            channel = parts[0] if len(parts) > 1 else 'BT'
-            self._temp_label.setText(f'{temp_val} °{tail} {channel}'.strip())
+            self._echo_bt.setText(f'{temp_val}°')
         self._cursor_active = True
 
     def _refresh_values(self) -> None:
@@ -293,9 +319,13 @@ class MySpressoHeroPanel(QFrame):
                 pass
             self._timer_label.setText(_fmt_mmss(elapsed))
 
-            mode = _safe(lambda: qmc.mode, 'F')
             temp2 = _safe(lambda: qmc.temp2, [])
             if temp2 and temp2[-1] is not None and temp2[-1] != -1:
-                self._temp_label.setText(f'{temp2[-1]:.1f} °{mode} BT')
+                self._echo_bt.setText(f'{temp2[-1]:.1f}°')
             else:
-                self._temp_label.setText(f'—.- °{mode} BT')
+                self._echo_bt.setText('—.-°')
+            temp1 = _safe(lambda: qmc.temp1, [])
+            if temp1 and temp1[-1] is not None and temp1[-1] != -1:
+                self._echo_et.setText(f'{temp1[-1]:.1f}°')
+            else:
+                self._echo_et.setText('—.-°')

@@ -68,6 +68,7 @@ from plus.util import datetime2epoch, epoch2datetime, schedulerLink, epoch2ISO86
 from plus.weight import Display, GreenDisplay, RoastedDisplay, PROCESS_STATE, WeightManager, GreenWeightItem, RoastedWeightItem
 from artisanlib.widgets import ClickableQLabel, ClickableQLineEdit, Splitter
 from artisanlib.dialogs import ArtisanResizeablDialog
+from artisanlib.styles import current_semantic_tokens
 from artisanlib.util import (float2float, float2str, convertWeight, weight_units, render_weight, comma2dot, float2floatWeightVolume, getDirectory,
     getResourcePath, deserialize, roast_time, get_total_roast_time_from_profile, stringfromseconds)
 
@@ -1313,7 +1314,7 @@ class NoDragItem(StandardItem):
             f'NoDragItem[Selected=false][Hover=true] {{ border:0px solid {item_color_hover}; background: {item_color_hover}; border-radius: {border_radius}px; }}'
             f'NoDragItem[Selected=true][Hover=false] {{ border:0px solid {plus_red}; background: {plus_red}; border-radius: {border_radius}px; }}'
             f'NoDragItem[Selected=true][Hover=true] {{ border:0px solid {plus_red_hover}; background: {plus_red_hover}; border-radius: {border_radius}px; }}'
-            f'QLabel {{ font-weight: bold; color: {white}; }}'
+            f'QLabel {{ font-weight: bold; color: {current_semantic_tokens().fg_on_brand}; }}'
             f'QLabelRight {{ font-size: 10pt; }}'
             'QElidedLabel { font-weight: normal; }')
 
@@ -1460,7 +1461,7 @@ class DragItem(StandardItem):
 
         # colors
 
-        today_text_color = white
+        today_text_color = current_semantic_tokens().fg_on_brand
         otherday_text_color = dark_white
         open_item_background = super_light_grey
         open_item_background_hover = super_light_grey_hover

@@ -69,12 +69,18 @@ class MySpressoHeader(QFrame):
         f_sub.setWeight(QFont.Weight.DemiBold)
         f_sub.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.4)
         self._brand_sub.setFont(f_sub)
-        brand_row = QHBoxLayout()
+        # Both labels vertically centred in the strip; the suffix is nudged
+        # toward the name's baseline via bottom-alignment INSIDE a fixed-height
+        # box so the pair always renders on one line, side by side.
+        brand_w = QWidget()
+        brand_row = QHBoxLayout(brand_w)
         brand_row.setSpacing(6)
         brand_row.setContentsMargins(0, 0, 0, 0)
-        brand_row.addWidget(self._brand_name)
+        self._brand_name.setFixedHeight(22)
+        self._brand_sub.setFixedHeight(19)
+        brand_row.addWidget(self._brand_name, 0, Qt.AlignmentFlag.AlignVCenter)
         brand_row.addWidget(self._brand_sub, 0, Qt.AlignmentFlag.AlignBottom)
-        layout.addLayout(brand_row)
+        layout.addWidget(brand_w, 0, Qt.AlignmentFlag.AlignVCenter)
         # Thin vertical divider between logo and navtoolbar (per v2 mockup).
         self._nav_divider = QLabel()
         self._nav_divider.setFixedWidth(1)

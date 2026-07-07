@@ -24,6 +24,8 @@ from PyQt6.QtWidgets import (
     QProgressBar, QPushButton,
 )
 
+from artisanlib.styles import current_semantic_tokens
+
 GITHUB_API_URL = 'https://api.github.com/repos/VeKTyS/myspe-artisan/releases/latest'
 
 
@@ -115,10 +117,11 @@ class UpdateBanner(QFrame):
         self.setFixedHeight(44)
         self.setObjectName('UpdateBanner')
         # All child selectors here so they override the global QWidget/QFrame rules
+        tok = current_semantic_tokens()
         self.setStyleSheet(
             'QFrame#UpdateBanner {'
             '  background: #0F1932;'
-            '  border-bottom: 1px solid #A8392E;'
+            f'  border-bottom: 1px solid {tok.accent};'
             '}'
             'QFrame#UpdateBanner QLabel {'
             '  color: #F5F1E8;'
@@ -127,7 +130,7 @@ class UpdateBanner(QFrame):
             '  font-size: 12px;'
             '}'
             'QFrame#UpdateBanner QPushButton#updateBtn {'
-            '  background: #A8392E; color: #FFFFFF; border: none;'
+            f'  background: {tok.accent}; color: {tok.fg_on_brand}; border: none;'
             '  border-radius: 4px; padding: 0 12px;'
             '  font-family: Montserrat, sans-serif; font-size: 11px; font-weight: 600;'
             '}'

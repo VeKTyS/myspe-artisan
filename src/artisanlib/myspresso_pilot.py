@@ -35,6 +35,7 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QVBoxLayout,
     QWidget,
@@ -91,27 +92,49 @@ class MySpressoPilotColumn(QFrame):
         self._native_gap.setVisible(False)
         root.addWidget(self._native_gap)
 
-        # ── Styled TEMP / RoR block (shown when native LCDs are OFF) ─────────
+        # ── Styled readouts (mockup pilot column) ───────────────────────────
+        #   BT · GRAIN   196.8 °C   (big, chart-navy)
+        #   ET · AIR     212.4 °C   (big, chart-red)
+        #   ─────────────────────
+        #   ΔBT   12.6°/min   DEV   10.9 %   AUC   412
+        #   ─────────────────────
+        #   AIR 70 %   TAMBOUR 62 %   BRÛLEUR 38 %   (first 3 event sliders)
+        self._kv_values: list[QLabel] = []
         styled = QVBoxLayout()
         styled.setContentsMargins(0, 0, 0, 0)
         styled.setSpacing(0)
-        self._temp_value = self._big_value('210.4', 'chart_et', 38)
-        styled.addLayout(self._readout('TEMP BT', self._temp_value))
+        self._bt_value = self._big_value('—.-', 'chart_bt', 32)
+        styled.addLayout(self._readout('BT · GRAIN', self._bt_value))
+        styled.addSpacing(12)
+        self._et_value = self._big_value('—.-', 'chart_et', 32)
+        styled.addLayout(self._readout('ET · AIR', self._et_value))
         styled.addSpacing(14)
         styled.addWidget(self._divider())
-        styled.addSpacing(14)
-        self._ror_value = self._big_value('—', 'fg_primary', 30)
-        styled.addLayout(self._readout('RoR Δ BT', self._ror_value))
-        styled.addSpacing(14)
+        styled.addSpacing(12)
+        self._ror_value = self._kv_row(styled, 'ΔBT')
+        self._dev_value = self._kv_row(styled, 'DEV')
+        self._auc_value = self._kv_row(styled, 'AUC')
+        styled.addSpacing(12)
         styled.addWidget(self._divider())
-        styled.addSpacing(14)
+        styled.addSpacing(12)
+        # First three event sliders (AIR / TAMBOUR / BRÛLEUR on MySpresso
+        # machines — labels follow the configured event types).
+        self._slider_rows: list[tuple[QLabel, QLabel]] = []
+        for _ in range(3):
+            box = QHBoxLayout()
+            box.setContentsMargins(0, 2, 0, 2)
+            lab = self._kicker('—')
+            val = QLabel('—')
+            val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._kv_values.append(val)
+            box.addWidget(lab)
+            box.addStretch()
+            box.addWidget(val)
+            styled.addLayout(box)
+            self._slider_rows.append((lab, val))
         self._styled_block = QWidget()
         self._styled_block.setLayout(styled)
         root.addWidget(self._styled_block)
-
-        # ── DEV (development time ratio) — always shown ─────────────────────
-        self._dev_value = self._big_value('—', 'fg_primary', 30)
-        root.addLayout(self._readout('DÉVELOPPEMENT', self._dev_value))
 
         root.addStretch()
 
@@ -177,6 +200,19 @@ class MySpressoPilotColumn(QFrame):
         self._dividers.append(line)
         return line
 
+    def _kv_row(self, into: QVBoxLayout, label: str) -> QLabel:
+        """Key/value line: muted caption left, tabular mono value right."""
+        box = QHBoxLayout()
+        box.setContentsMargins(0, 2, 0, 2)
+        val = QLabel('—')
+        val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._kv_values.append(val)
+        box.addWidget(self._kicker(label))
+        box.addStretch()
+        box.addWidget(val)
+        into.addLayout(box)
+        return val
+
     def _ctx_label(self, text: str) -> QLabel:
         # Same kicker treatment (small warm-grey caption).
         return self._kicker(text)
@@ -214,6 +250,11 @@ class MySpressoPilotColumn(QFrame):
                 'font-family: "JetBrains Mono"; font-size: 12px;'
                 f' font-weight: 500; color: {tok.fg_primary};'
             )
+        for lbl in self._kv_values:
+            lbl.setStyleSheet(
+                'font-family: "JetBrains Mono"; font-size: 15px;'
+                f' font-weight: 500; color: {tok.fg_primary};'
+            )
 
     def restyle(self) -> None:
         """Public hook: re-apply theme colours (e.g. on scheme change)."""
@@ -227,23 +268,30 @@ class MySpressoPilotColumn(QFrame):
         self._refresh.start()
 
     def set_native_lcds(self, lcd_frame: QWidget) -> None:
-        """Reparent the native Artisan LCD panel (ET/BT/ΔBT …) into the top of
-        this column. Its visibility stays owned by Artisan's Readings toggle
-        (showLCDs/hideLCDs); set_native_mode mirrors that to avoid duplication."""
+        """Host (and keep hidden) the native Artisan LCD panel.
+
+        Mockup design: the styled BT/ET/ΔBT readouts are THE canonical
+        display of this column. The native panel is still re-parented here
+        so it has a sane parent and its LCDs keep receiving values (the
+        Large LCD windows and all display() call-sites are unaffected) —
+        it just never competes visually with the styled block."""
         from PyQt6.QtWidgets import QSizePolicy
-        # In the column the panel sits at its natural height at the top; the
-        # column's trailing stretch absorbs the slack.
         lcd_frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self._native_slot.addWidget(lcd_frame)
-        self.set_native_mode(lcd_frame.isVisible())
+        self._native_frame: QWidget | None = lcd_frame
+        lcd_frame.setVisible(False)
+        self.set_native_mode(False)
 
     def set_native_mode(self, native_on: bool) -> None:
-        """When the native LCDs are visible, hide the styled TEMP/RoR block
-        (they show the same BT / Δ BT) so nothing is duplicated. DÉVELOPPEMENT
-        and the MAGASIN/CHARGE footer are unique and always remain visible."""
-        self._styled_block.setVisible(not native_on)
-        self._native_divider.setVisible(native_on)
-        self._native_gap.setVisible(native_on)
+        """Mockup design: the styled readouts always win — the hosted native
+        panel stays hidden whatever Artisan's Readings toggle does."""
+        del native_on
+        native_frame = getattr(self, '_native_frame', None)
+        if native_frame is not None:
+            native_frame.setVisible(False)
+        self._styled_block.setVisible(True)
+        self._native_divider.setVisible(False)
+        self._native_gap.setVisible(False)
 
     def update_cursor(self, raw_message: str) -> None:
         """Display the matplotlib cursor temperature / RoR in the column.
@@ -272,9 +320,9 @@ class MySpressoPilotColumn(QFrame):
             val = parts[-1] if parts else head.strip()
             if '/min' in tail:
                 # RoR sample under cursor
-                self._ror_value.setText(f'{val} °{tail}')
+                self._ror_value.setText(f'{val}°{tail}')
             else:
-                self._temp_value.setText(f'{val} °{tail}')
+                self._bt_value.setText(f'{val} °{tail}')
         self._cursor_active = True
 
     def _refresh_values(self) -> None:
@@ -291,22 +339,47 @@ class MySpressoPilotColumn(QFrame):
         qmc = aw.qmc
         mode = _safe(lambda: qmc.mode, 'F')
 
-        # TEMP (BT) + RoR (Δ BT) — skipped while chart cursor owns them
+        # BT / ET / RoR — skipped while the chart cursor owns them
         if not cursor_active:
             temp2 = _safe(lambda: qmc.temp2, [])
             if temp2 and temp2[-1] is not None and temp2[-1] != -1:
-                self._temp_value.setText(f'{temp2[-1]:.1f} °{mode}')
+                self._bt_value.setText(f'{temp2[-1]:.1f} °{mode}')
             else:
-                self._temp_value.setText(f'—.- °{mode}')
+                self._bt_value.setText(f'—.- °{mode}')
+
+            temp1 = _safe(lambda: qmc.temp1, [])
+            if temp1 and temp1[-1] is not None and temp1[-1] != -1:
+                self._et_value.setText(f'{temp1[-1]:.1f} °{mode}')
+            else:
+                self._et_value.setText(f'—.- °{mode}')
 
             delta2 = _safe(lambda: qmc.delta2, [])
             if delta2 and delta2[-1] is not None:
-                self._ror_value.setText(f'{delta2[-1]:+.1f} °{mode}/min')
+                self._ror_value.setText(f'{delta2[-1]:+.1f}°/min')
             else:
-                self._ror_value.setText(f'— °{mode}/min')
+                self._ror_value.setText('—')
 
         # DEV — development time ratio: (t - t_FCs) / (t - t_CHARGE)
         self._dev_value.setText(self._dev_ratio_text(qmc))
+
+        # AUC — mirror the native AUC readout (already computed by Artisan)
+        auc = _safe(aw.AUClcd.text, '')
+        self._auc_value.setText(auc if auc and auc not in ('--', '0') else '—')
+
+        # Event sliders 1-3 (AIR / TAMBOUR / BRÛLEUR on MySpresso machines)
+        try:
+            etypes = _safe(lambda: qmc.etypes, [])
+            sliders = (aw.slider1, aw.slider2, aw.slider3)
+            for i, (lab, val) in enumerate(self._slider_rows):
+                name = str(etypes[i]) if i < len(etypes) else ''
+                if name and not name.startswith('-'):
+                    lab.setText(name.upper())
+                    val.setText(f'{sliders[i].value()} %')
+                else:
+                    lab.setText('—')
+                    val.setText('—')
+        except Exception:  # noqa: BLE001
+            pass
 
         # Context footer
         store = _safe(lambda: qmc.plus_store_label or qmc.plus_store or '', '') or '—'

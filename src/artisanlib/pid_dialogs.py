@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 from artisanlib.util import stringfromseconds, stringtoseconds, comma2dot, toInt, toFloat, float2float
 from artisanlib.dialogs import ArtisanDialog
+from artisanlib.styles import current_semantic_tokens
 from artisanlib.widgets import MyQComboBox, MyQDoubleSpinBox
 
 from PyQt6.QtCore import Qt, pyqtSlot, QRegularExpression, QSettings, QTimer
@@ -2227,6 +2228,7 @@ class PXRpidDlgControl(PXpidDlgControl):
 
     @pyqtSlot(int)
     def paintlabels(self, _:int = 0) -> None:
+        tok = current_semantic_tokens()
         str1 = 'T = ' + str(self.aw.fujipid.PXR['segment1sv'][0]) + ', Ramp = ' + stringfromseconds(self.aw.fujipid.PXR['segment1ramp'][0]) + ', Soak = ' + stringfromseconds(self.aw.fujipid.PXR['segment1soak'][0])
         str2 = 'T = ' + str(self.aw.fujipid.PXR['segment2sv'][0]) + ', Ramp = ' + stringfromseconds(self.aw.fujipid.PXR['segment2ramp'][0]) + ', Soak = ' + stringfromseconds(self.aw.fujipid.PXR['segment2soak'][0])
         str3 = 'T = ' + str(self.aw.fujipid.PXR['segment3sv'][0]) + ', Ramp = ' + stringfromseconds(self.aw.fujipid.PXR['segment3ramp'][0]) + ', Soak = ' + stringfromseconds(self.aw.fujipid.PXR['segment3soak'][0])
@@ -2250,35 +2252,35 @@ class PXRpidDlgControl(PXpidDlgControl):
         if pattern[int(self.aw.fujipid.PXR['rampsoakpattern'][0])][0]:
             self.label_rs1.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs1.setStyleSheet('background-color:white;')
+            self.label_rs1.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXR['rampsoakpattern'][0])][1]:
             self.label_rs2.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs2.setStyleSheet('background-color:white;')
+            self.label_rs2.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXR['rampsoakpattern'][0])][2]:
             self.label_rs3.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs3.setStyleSheet('background-color:white;')
+            self.label_rs3.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXR['rampsoakpattern'][0])][3]:
             self.label_rs4.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs4.setStyleSheet('background-color:white;')
+            self.label_rs4.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXR['rampsoakpattern'][0])][4]:
             self.label_rs5.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs5.setStyleSheet('background-color:white;')
+            self.label_rs5.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXR['rampsoakpattern'][0])][5]:
             self.label_rs6.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs6.setStyleSheet('background-color:white;')
+            self.label_rs6.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXR['rampsoakpattern'][0])][6]:
             self.label_rs7.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs7.setStyleSheet('background-color:white;')
+            self.label_rs7.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXR['rampsoakpattern'][0])][7]:
             self.label_rs8.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs8.setStyleSheet('background-color:white;')
+            self.label_rs8.setStyleSheet(f'background-color:{tok.bg_raised};')
 
     @pyqtSlot(bool)
     def setONautotune(self, _:bool = False) -> None:
@@ -3552,6 +3554,7 @@ class PXG4pidDlgControl(PXpidDlgControl):
 
     @pyqtSlot(int)
     def paintlabels(self, _:int = 0) -> None:
+        tok = current_semantic_tokens()
         #read values of computer variables (not the actual pid values) to place in buttons
         str1 = '1 [T ' + str(self.aw.fujipid.PXG4['segment1sv'][0]) + '] [R ' + stringfromseconds(self.aw.fujipid.PXG4['segment1ramp'][0]) + '] [S ' + stringfromseconds(self.aw.fujipid.PXG4['segment1soak'][0]) + ']'
         str2 = '2 [T ' + str(self.aw.fujipid.PXG4['segment2sv'][0]) + '] [R ' + stringfromseconds(self.aw.fujipid.PXG4['segment2ramp'][0]) + '] [S ' + stringfromseconds(self.aw.fujipid.PXG4['segment2soak'][0]) + ']'
@@ -3596,68 +3599,68 @@ class PXG4pidDlgControl(PXpidDlgControl):
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][0]:
             self.label_rs1.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs1.setStyleSheet('background-color:white;')
+            self.label_rs1.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][1]:
             self.label_rs2.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs2.setStyleSheet('background-color:white;')
+            self.label_rs2.setStyleSheet(f'background-color:{tok.bg_raised};')
 
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][2]:
             self.label_rs3.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs3.setStyleSheet('background-color:white;')
+            self.label_rs3.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][3]:
             self.label_rs4.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs4.setStyleSheet('background-color:white;')
+            self.label_rs4.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][4]:
             self.label_rs5.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs5.setStyleSheet('background-color:white;')
+            self.label_rs5.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][5]:
             self.label_rs6.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs6.setStyleSheet('background-color:white;')
+            self.label_rs6.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][6]:
             self.label_rs7.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs7.setStyleSheet('background-color:white;')
+            self.label_rs7.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][7]:
             self.label_rs8.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs8.setStyleSheet('background-color:white;')
+            self.label_rs8.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][8]:
             self.label_rs9.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs9.setStyleSheet('background-color:white;')
+            self.label_rs9.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][9]:
             self.label_rs10.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs10.setStyleSheet('background-color:white;')
+            self.label_rs10.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][10]:
             self.label_rs11.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs11.setStyleSheet('background-color:white;')
+            self.label_rs11.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][11]:
             self.label_rs12.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs12.setStyleSheet('background-color:white;')
+            self.label_rs12.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][12]:
             self.label_rs13.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs13.setStyleSheet('background-color:white;')
+            self.label_rs13.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][13]:
             self.label_rs14.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs14.setStyleSheet('background-color:white;')
+            self.label_rs14.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][14]:
             self.label_rs15.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs15.setStyleSheet('background-color:white;')
+            self.label_rs15.setStyleSheet(f'background-color:{tok.bg_raised};')
         if pattern[int(self.aw.fujipid.PXG4['rampsoakpattern'][0])][15]:
             self.label_rs16.setStyleSheet("background-color:'#FFCC99';")
         else:
-            self.label_rs16.setStyleSheet('background-color:white;')
+            self.label_rs16.setStyleSheet(f'background-color:{tok.bg_raised};')
 
     @pyqtSlot(bool)
     def setNsvSlot(self, _:bool = False) -> None:

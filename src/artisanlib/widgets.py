@@ -598,8 +598,9 @@ class AnimatedMajorEventPushButton(MajorEventPushButton):
             anim_light_color.value(),
             anim_light_color.alpha())
 
-        selected_anim_dark_color = QColor('#d4336a').lighter(80)
-        selected_anim_light_color = QColor('#d4336a').lighter(120)
+        from artisanlib import design_tokens as _dt  # noqa: PLC0415
+        selected_anim_dark_color = QColor(_dt.RED_600).lighter(80)
+        selected_anim_light_color = QColor(_dt.RED_600).lighter(120)
         # we reduce the staturation slightly:
         selected_anim_light_color = QColor.fromHsv(
             selected_anim_light_color.hslHue(),
@@ -664,37 +665,46 @@ class AnimatedMajorEventPushButton(MajorEventPushButton):
     zcolor = pyqtProperty(QColor, getBackColor, setBackColor)
 
 class MinorEventPushButton(EventPushButton): # pylint: disable=too-few-public-methods
-    # MySpresso fork: outlined warm style by default (transparent fill, warm
-    # border, navy text). Once fired (Selected=true) the button fills with the
-    # provided background_color so the user can see the event was recorded.
+    # MySpresso fork: outlined ghost chip by default (transparent fill, thin
+    # border, brand text — theme-aware). Once fired (Selected=true) the button
+    # fills with the provided background_color so the user can see the event
+    # was recorded.
     def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#7A736A') -> None:
         super().__init__(text, parent, background_color)
+        from artisanlib.styles import current_semantic_tokens  # noqa: PLC0415 (import cycle guard)
+        tok = current_semantic_tokens()
         outlined = (
             'QPushButton[Selected=false]:!flat:!hover:!pressed{'
             'background-color: transparent;'
-            'color: #0F1E3D;'
-            'border: 1px solid #D9D2C5;'
+            f'color: {tok.fg_brand};'
+            f'border: 1px solid {tok.border_strong};'
             'border-radius: 2px;'
             'padding: 4px 8px;'
             '}'
             'QPushButton[Selected=false]:!flat:hover:!pressed{'
-            'background-color: #F2EFE7;'
-            'color: #0F1E3D;'
-            'border: 1px solid #7A736A;'
+            f'background-color: {tok.surface_alt};'
+            f'color: {tok.fg_brand};'
+            f'border: 1px solid {tok.fg_muted};'
             'border-radius: 2px;'
             '}'
             'QPushButton[Selected=false]:!flat:pressed{'
             f'background-color: {background_color};'
-            'color: #FAF8F4;'
+            f'color: {tok.fg_on_brand};'
             'border: 1px solid ' + background_color + ';'
             'border-radius: 2px;'
             '}'
             'QPushButton[Selected=true]:!flat{'
             f'background-color: {background_color};'
-            'color: #FAF8F4;'
+            f'color: {tok.fg_on_brand};'
             'border: 1px solid ' + background_color + ';'
             'border-radius: 2px;'
             'padding: 4px 8px;'
+            '}'
+            'QPushButton:!enabled{'
+            'background-color: transparent;'
+            f'color: {tok.fg_muted};'
+            f'border: 1px solid {tok.border};'
+            'border-radius: 2px;'
             '}'
         )
         self.default_style = outlined

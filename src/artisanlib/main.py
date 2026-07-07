@@ -322,7 +322,7 @@ class Artisan(QtSingleApplication):
                         apply_myspresso_stylesheet(self)
                         for _wname in ('myspresso_header', 'myspresso_hero',
                                        'myspresso_pilot', 'myspresso_eventlog',
-                                       'myspresso_stats'):
+                                       'myspresso_stats', 'myspresso_phases'):
                             _w = getattr(aw, _wname, None)
                             if _w is not None and hasattr(_w, 'restyle'):
                                 _w.restyle()
@@ -3125,8 +3125,9 @@ class ApplicationWindow(QMainWindow):
                 f'background-color: {bg};'
                 '}'
                 'QPushButton:!enabled {'
-                f'color: {_tok.fg_muted};'
+                f'color: {_tok.fg_secondary if _tok.dark else _tok.fg_muted};'
                 f'background-color: {_tok.surface_alt};'
+                f'border: 1px solid {_tok.border};'
                 '}'
                 'QPushButton:pressed {'
                 f'color: {fg};'
@@ -3266,19 +3267,20 @@ class ApplicationWindow(QMainWindow):
             self.buttonSTARTSTOP.setVisible(False)
 
         #create 1C START, 1C END, 2C START and 2C END buttons
-        self.buttonFCs: MinorEventPushButton = MinorEventPushButton(QApplication.translate('Button', 'FC\nSTART'))
+        # MySpresso: single-line French chips per the validated mockup
+        self.buttonFCs: MinorEventPushButton = MinorEventPushButton('DÉBUT 1C')
         self.buttonFCs.setToolTip(QApplication.translate('Tooltip', 'First Crack Start'))
         self.buttonFCs.clicked.connect(self.qmc.mark1Cstart)
 
-        self.buttonFCe: MinorEventPushButton = MinorEventPushButton(QApplication.translate('Button', 'FC\nEND'))
+        self.buttonFCe: MinorEventPushButton = MinorEventPushButton('FIN 1C')
         self.buttonFCe.setToolTip(QApplication.translate('Tooltip', 'First Crack End'))
         self.buttonFCe.clicked.connect(self.qmc.mark1Cend)
 
-        self.buttonSCs: MinorEventPushButton = MinorEventPushButton(QApplication.translate('Button', 'SC\nSTART'))
+        self.buttonSCs: MinorEventPushButton = MinorEventPushButton('DÉBUT 2C')
         self.buttonSCs.setToolTip(QApplication.translate('Tooltip', 'Second Crack Start'))
         self.buttonSCs.clicked.connect(self.qmc.mark2Cstart)
 
-        self.buttonSCe: MinorEventPushButton = MinorEventPushButton(QApplication.translate('Button', 'SC\nEND'))
+        self.buttonSCe: MinorEventPushButton = MinorEventPushButton('FIN 2C')
         self.buttonSCe.setToolTip(QApplication.translate('Tooltip', 'Second Crack End'))
         self.buttonSCe.clicked.connect(self.qmc.mark2Cend)
 
@@ -3295,14 +3297,17 @@ class ApplicationWindow(QMainWindow):
         self.buttonRESET.clicked.connect(self.qmc.resetButtonAction)
 
         #create CHARGE button
-        # MySpresso fork: CHARGE = primary navy. DROP = danger red.
+        # MySpresso fork: CHARGE = primary navy, DROP = danger red — both use
+        # the theme's fill variant (lighter on the dark ground, cf. mockup).
         from artisanlib import design_tokens as _ms_dt
-        self.buttonCHARGE: AnimatedMajorEventPushButton = AnimatedMajorEventPushButton(QApplication.translate('Button', 'CHARGE'), background_color=_ms_dt.NAVY_700)
+        _charge_fill = _ms_dt.NAVY_500 if current_semantic_tokens().dark else _ms_dt.NAVY_700
+        _drop_fill = _ms_dt.RED_400 if current_semantic_tokens().dark else _ms_dt.RED_600
+        self.buttonCHARGE: AnimatedMajorEventPushButton = AnimatedMajorEventPushButton(QApplication.translate('Button', 'CHARGE'), background_color=_charge_fill)
         self.buttonCHARGE.setToolTip(QApplication.translate('Tooltip', 'Charge'))
         self.buttonCHARGE.clicked.connect(self.qmc.markCharge)
 
         #create DROP button
-        self.buttonDROP: MajorEventPushButton = MajorEventPushButton(QApplication.translate('Button', 'DROP'), background_color=_ms_dt.RED_600)
+        self.buttonDROP: MajorEventPushButton = MajorEventPushButton(QApplication.translate('Button', 'DROP'), background_color=_drop_fill)
         self.buttonDROP.setToolTip(QApplication.translate('Tooltip', 'Drop'))
         self.buttonDROP.clicked.connect(self.qmc.markDrop)
 
@@ -3320,7 +3325,7 @@ class ApplicationWindow(QMainWindow):
             self.buttonCONTROL.setVisible(False)
 
         #create EVENT record button
-        self.buttonEVENT: AuxEventPushButton = AuxEventPushButton(QApplication.translate('Button', 'EVENT'))
+        self.buttonEVENT: AuxEventPushButton = AuxEventPushButton('ÉVÉNEMENT')
         self.buttonEVENT.setToolTip(QApplication.translate('Tooltip', 'Event'))
         self.buttonEVENT.clicked.connect(self.qmc.EventRecord_action)
 
@@ -3381,12 +3386,12 @@ class ApplicationWindow(QMainWindow):
         #HUD button (button_18 was removed)
 
         #create DRY button
-        self.buttonDRY: MinorEventPushButton = MinorEventPushButton(QApplication.translate('Button', 'DRY\nEND'))
+        self.buttonDRY: MinorEventPushButton = MinorEventPushButton('FIN SÉCHAGE')
         self.buttonDRY.setToolTip(QApplication.translate('Tooltip', 'Dry End'))
         self.buttonDRY.clicked.connect(self.qmc.markDryEnd)
 
         #create COOLe button
-        self.buttonCOOL: MinorEventPushButton = MinorEventPushButton(QApplication.translate('Button', 'COOL\nEND'))
+        self.buttonCOOL: MinorEventPushButton = MinorEventPushButton('FIN REFROID.')
         self.buttonCOOL.setToolTip(QApplication.translate('Tooltip', 'Cool End'))
         self.buttonCOOL.clicked.connect(self.qmc.markCoolEnd)
 
@@ -3670,7 +3675,7 @@ class ApplicationWindow(QMainWindow):
         # All stylesheet of its children (the actual event buttons) needs to be non-conflicting.
         # Any conflict will turn off merging of parent styles and just rely on the child stylesheet.
         self.lowerbuttondialog.setStyleSheet(
-            artisan_event_button_style.format(
+            artisan_event_button_style().format(
                 min_width=self.standard_button_min_width_px - 6,
                 min_height=self.standard_button_height - 7,
                 padding=3,
@@ -4355,6 +4360,12 @@ class ApplicationWindow(QMainWindow):
         except Exception as _e:  # pylint: disable=broad-except
             _log.exception(_e)
             self.myspresso_stats = None  # type: ignore[assignment]
+        try:
+            from artisanlib.myspresso_phases import MySpressoPhaseTiles
+            self.myspresso_phases: MySpressoPhaseTiles = MySpressoPhaseTiles(self.main_widget)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+            self.myspresso_phases = None  # type: ignore[assignment]
 
         mainlayout:QVBoxLayout = QVBoxLayout(self.main_widget)
         mainlayout.setContentsMargins(0, 0, 0, 0)
@@ -4378,14 +4389,22 @@ class ApplicationWindow(QMainWindow):
             self.mys_v_splitter.addWidget(self.myspresso_hero)
             _mys_v_sizes.append(96)
 
-        # MySpresso fork: phase LCDs (SEC%/»SEC/»d1C) get their OWN resizable
-        # pane below the hero — independent of the profile bar. Hidden by
-        # default (phasesLCDs.hide()), so the splitter collapses it to 0 until
-        # the user enables Phase LCDs; then it appears with its own drag handle
-        # and can likewise be dragged closed (min 0 + collapsible).
-        self.mys_v_splitter.addWidget(self.phasesLCDs)
+        # MySpresso fork: the phases pane below the hero hosts the mockup's
+        # phase TILES (TP / SÉCHAGE / MAILLARD / DÉVELOPPEMENT — always
+        # visible) plus the legacy native phase LCDs (hidden by default,
+        # still toggleable via the Phase LCDs option as before). One
+        # resizable, collapsible splitter pane for both.
+        _phases_pane = QWidget()
+        _phases_pane_layout = QVBoxLayout(_phases_pane)
+        _phases_pane_layout.setContentsMargins(0, 0, 0, 0)
+        _phases_pane_layout.setSpacing(0)
+        if self.myspresso_phases is not None:
+            _phases_pane_layout.addWidget(self.myspresso_phases)
+        _phases_pane_layout.addWidget(self.phasesLCDs)
+        self.mys_v_splitter.addWidget(_phases_pane)
+        _phases_pane.setMinimumHeight(0)
         self.phasesLCDs.setMinimumHeight(0)
-        _mys_v_sizes.append(76)
+        _mys_v_sizes.append(96 if self.myspresso_phases is not None else 76)
 
         self.mys_v_splitter.addWidget(self.mys_h_splitter)
         _mys_v_sizes.append(9999)
@@ -4448,6 +4467,11 @@ class ApplicationWindow(QMainWindow):
         try:
             if self.myspresso_pilot is not None:
                 self.myspresso_pilot.wire(self)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+        try:
+            if self.myspresso_phases is not None:
+                self.myspresso_phases.wire(self)
         except Exception as _e:  # pylint: disable=broad-except
             _log.exception(_e)
 
@@ -5730,6 +5754,7 @@ class ApplicationWindow(QMainWindow):
                     except Exception as _ex:  # pylint: disable=broad-except
                         _log.exception(_ex)
             self.ntb.set_message = _myspresso_set_message  # type: ignore[method-assign]
+            _tok = current_semantic_tokens()
             for _a in self.ntb.actions():
                 _w = self.ntb.widgetForAction(_a)
                 if _w is None:
@@ -5740,10 +5765,10 @@ class ApplicationWindow(QMainWindow):
                     ' background-color: transparent; border-radius: 3px;'
                     '}'
                     'QToolButton:hover {'
-                    ' border: 1px solid #D9D2C5; background-color: #F2EFE7;'
+                    f' border: 1px solid {_tok.border_strong}; background-color: {_tok.surface_alt};'
                     '}'
                     'QToolButton:checked {'
-                    ' border: 1px solid #D9D2C5; background-color: #E8E3D6;'
+                    f' border: 1px solid {_tok.border_strong}; background-color: {_tok.border};'
                     '}'
                 )
         except Exception as _e:  # pylint: disable=broad-except
