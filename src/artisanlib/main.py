@@ -3168,6 +3168,22 @@ class ApplicationWindow(QMainWindow):
             '}'
         )
 
+        # Filled fills per theme — the mockup's dark variant lightens both
+        # brand fills so they read on the dark ground (navy #243B6B, red
+        # #C66459); the light values are the brand navy.700 / red.600.
+        if _tok.dark:
+            _navy_fill = (_ms.NAVY_500, _ms.NAVY_400, _ms.NAVY_600)
+            _red_fill = (_ms.RED_400, _ms.RED_300, _ms.RED_500)
+            _pid_fill = (_ms.NAVY_400, _ms.NAVY_300, _ms.NAVY_500)
+            _sv_plus_fill = (_ms.RED_300, _ms.RED_200, _ms.RED_400)
+            _sv_minus_fill = (_ms.NAVY_300, _ms.NAVY_200, _ms.NAVY_400)
+        else:
+            _navy_fill = (_ms.NAVY_700, _ms.NAVY_600, _ms.NAVY_800)
+            _red_fill = (_ms.RED_600, _ms.RED_500, _ms.RED_700)
+            _pid_fill = (_ms.NAVY_500, _ms.NAVY_600, _ms.NAVY_700)
+            _sv_plus_fill = (_ms.RED_500, _ms.RED_400, _ms.RED_600)
+            _sv_minus_fill = (_ms.NAVY_400, _ms.NAVY_300, _ms.NAVY_500)
+
         self.pushbuttonstyles: dict[str, str] = {
             # RESET: secondary outlined — low-emphasis "go back" action
             'RESET': _outlined_warm,
@@ -3176,32 +3192,32 @@ class ApplicationWindow(QMainWindow):
             'OFF': _outlined_warm,
             # ON: monitor live — red brick, high attention
             'ON': _btn_style(
-                bg=_ms.RED_600, bg_hover=_ms.RED_500, bg_pressed=_ms.RED_700,
+                bg=_red_fill[0], bg_hover=_red_fill[1], bg_pressed=_red_fill[2],
             ),
             # STOP: recording idle — DÉBUT, the primary call-to-action
             # (filled navy) — the one button that visually leads the row
             'STOP': _btn_style(
-                bg=_ms.NAVY_700, bg_hover=_ms.NAVY_600, bg_pressed=_ms.NAVY_800,
+                bg=_navy_fill[0], bg_hover=_navy_fill[1], bg_pressed=_navy_fill[2],
             ),
             # START: recording about to start — strong red signal
             'START': _btn_style(
-                bg=_ms.RED_600, bg_hover=_ms.RED_500, bg_pressed=_ms.RED_700,
+                bg=_red_fill[0], bg_hover=_red_fill[1], bg_pressed=_red_fill[2],
             ),
             # PID: control inactive — navy
             'PID': _btn_style(
-                bg=_ms.NAVY_500, bg_hover=_ms.NAVY_600, bg_pressed=_ms.NAVY_700,
+                bg=_pid_fill[0], bg_hover=_pid_fill[1], bg_pressed=_pid_fill[2],
             ),
             # PIDactive: control engaged — red
             'PIDactive': _btn_style(
-                bg=_ms.RED_600, bg_hover=_ms.RED_500, bg_pressed=_ms.RED_700,
+                bg=_red_fill[0], bg_hover=_red_fill[1], bg_pressed=_red_fill[2],
             ),
             # SV +/-: small increment buttons, lighter tints
             'SV +': _btn_style(
-                bg=_ms.RED_500, bg_hover=_ms.RED_400, bg_pressed=_ms.RED_600,
+                bg=_sv_plus_fill[0], bg_hover=_sv_plus_fill[1], bg_pressed=_sv_plus_fill[2],
                 small=True,
             ),
             'SV -': _btn_style(
-                bg=_ms.NAVY_400, bg_hover=_ms.NAVY_300, bg_pressed=_ms.NAVY_500,
+                bg=_sv_minus_fill[0], bg_hover=_sv_minus_fill[1], bg_pressed=_sv_minus_fill[2],
                 small=True,
             ),
             }
@@ -3409,7 +3425,10 @@ class ApplicationWindow(QMainWindow):
         self.buttonSVm5.clicked.connect(self.adjustPIDsv5m)
 
         # NavigationToolbar VMToolbar
-        self.ntb: VMToolbar = VMToolbar(self.qmc.canvas, self.main_widget)
+        # MySpresso: white toolbar icons on the dark theme (the rebuild path
+        # in updateCanvasColors only runs on colour changes, not at startup)
+        self.ntb: VMToolbar = VMToolbar(self.qmc.canvas, self.main_widget,
+                                        current_semantic_tokens().dark)
         #self.ntb.setMinimumHeight(50)
 
         # MySpresso fork: apply the locLabel hide + set_message forwarding +

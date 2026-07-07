@@ -14,7 +14,7 @@ import pathlib
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QColor, QIcon, QPixmap
+from PyQt6.QtGui import QColor, QIcon
 from PyQt6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -31,12 +31,6 @@ if TYPE_CHECKING:
 
 
 _ICON_DIR = pathlib.Path(__file__).parent.parent / 'icons' / 'myspresso'
-# Prefer PNG (universally supported by Qt on all platforms including Windows).
-# Fall back to webp for legacy builds that only ship that asset.
-_LOGO_PATH = next(
-    (p for p in (_ICON_DIR / 'logo.png', _ICON_DIR / 'logo.webp') if p.is_file()),
-    _ICON_DIR / 'logo.png',
-)
 
 
 class MySpressoHeader(QFrame):
@@ -60,18 +54,27 @@ class MySpressoHeader(QFrame):
         self._nav_slot.setSpacing(2)
         self._nav_slot.setContentsMargins(0, 0, 0, 0)
 
-        self._logo = QLabel()
-        if _LOGO_PATH.is_file():
-            pm = QPixmap(str(_LOGO_PATH))
-            if not pm.isNull():
-                self._logo.setPixmap(
-                    pm.scaledToHeight(40, Qt.TransformationMode.SmoothTransformation)
-                )
-        else:
-            # Fallback when logo asset is missing — use the script-style label
-            self._logo.setText('MySpresso')
-            self._logo.setObjectName('brand')
-        layout.addWidget(self._logo)
+        # Typographic wordmark, per the validated mockup (no image asset —
+        # a bitmap logo can't follow the theme): bold brand name + spaced
+        # uppercase suffix. Colours applied in _apply_theme().
+        from PyQt6.QtGui import QFont
+        self._brand_name = QLabel('Zabawa')
+        f_brand = QFont('Montserrat')
+        f_brand.setPixelSize(17)
+        f_brand.setWeight(QFont.Weight.ExtraBold)
+        self._brand_name.setFont(f_brand)
+        self._brand_sub = QLabel('ROAST')
+        f_sub = QFont('Montserrat')
+        f_sub.setPixelSize(10)
+        f_sub.setWeight(QFont.Weight.DemiBold)
+        f_sub.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.4)
+        self._brand_sub.setFont(f_sub)
+        brand_row = QHBoxLayout()
+        brand_row.setSpacing(6)
+        brand_row.setContentsMargins(0, 0, 0, 0)
+        brand_row.addWidget(self._brand_name)
+        brand_row.addWidget(self._brand_sub, 0, Qt.AlignmentFlag.AlignBottom)
+        layout.addLayout(brand_row)
         # Thin vertical divider between logo and navtoolbar (per v2 mockup).
         self._nav_divider = QLabel()
         self._nav_divider.setFixedWidth(1)
@@ -128,6 +131,8 @@ class MySpressoHeader(QFrame):
     def _apply_theme(self) -> None:
         """(Re-)apply all colour-bearing styles from the semantic tokens."""
         tok = current_semantic_tokens()
+        self._brand_name.setStyleSheet(f'color: {tok.fg_brand}; background: transparent;')
+        self._brand_sub.setStyleSheet(f'color: {tok.fg_muted}; background: transparent; padding-bottom: 2px;')
         self._nav_divider.setStyleSheet(f'background-color: {tok.border};')
         self._mode_badge.setStyleSheet(
             'QLabel#modeBadge {'

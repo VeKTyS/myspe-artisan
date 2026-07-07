@@ -186,8 +186,8 @@ class SemanticTokens:
 
     __slots__ = ('dark', 'bg', 'bg_raised', 'bg_sunken', 'surface', 'surface_alt',
                  'border', 'border_strong', 'fg_primary', 'fg_secondary',
-                 'fg_muted', 'fg_on_brand', 'fg_accent', 'brand', 'accent',
-                 'chart_et', 'chart_bt', 'chart_delta',
+                 'fg_muted', 'fg_on_brand', 'fg_accent', 'fg_brand', 'brand',
+                 'accent', 'chart_et', 'chart_bt', 'chart_delta',
                  'success_fg', 'success_bg', 'error_fg', 'error_bg')
 
     def __init__(self, dark: bool) -> None:
@@ -205,6 +205,9 @@ class SemanticTokens:
             self.fg_muted = DARK_FG_MUTED
             self.fg_on_brand = DARK_FG_ON_BRAND
             self.fg_accent = DARK_FG_ACCENT
+            # brand as TEXT on the dark ground needs the lighter focus-navy
+            # (the fill-navy DARK_BRAND is illegible as type on #16181D)
+            self.fg_brand = DARK_BORDER_FOCUS
             self.brand = DARK_BRAND
             self.accent = DARK_ACCENT
             # chart colours lightened for a dark canvas
@@ -228,6 +231,7 @@ class SemanticTokens:
             self.fg_muted = LIGHT_FG_MUTED
             self.fg_on_brand = LIGHT_FG_ON_BRAND
             self.fg_accent = LIGHT_FG_ACCENT
+            self.fg_brand = LIGHT_BRAND
             self.brand = LIGHT_BRAND
             self.accent = LIGHT_ACCENT
             self.chart_et = CHART_TE
