@@ -113,7 +113,7 @@ def load_qss() -> str:
         return ''
     tokens = _token_values()
 
-    def _resolve(m: 're.Match[str]') -> str:
+    def _resolve(m: re.Match[str]) -> str:
         name = m.group(1)
         try:
             return tokens[name]
