@@ -23,6 +23,34 @@ startup_time = libtime.process_time()
 
 from artisanlib import __version__, __revision__, __build__, __signature__, __release_sponsor_name__
 from artisanlib import design_tokens
+from artisanlib.styles import current_semantic_tokens
+
+
+def myspresso_default_lcdpalettes(dark:bool) -> tuple[dict[str,str], dict[str,str]]:
+    """Fork default LCD colours (background, foreground) per theme.
+
+    The light values MUST stay byte-identical to the historical defaults so
+    that 'saved settings == light defaults' detection keeps working.
+    """
+    if dark:
+        b = {'timer':design_tokens.DARK_BG_RAISED, 'et':design_tokens.RED_600,
+             'bt':design_tokens.NAVY_600, 'deltaet':design_tokens.DARK_SURFACE_ALT,
+             'deltabt':design_tokens.DARK_SURFACE_ALT, 'sv':design_tokens.DARK_BG_RAISED,
+             'rstimer':design_tokens.DARK_BG_RAISED, 'slowcoolingtimer':design_tokens.DARK_BG_RAISED}
+        f = {'timer':design_tokens.DARK_FG_PRIMARY, 'et':'#FFFFFF',
+             'bt':'#FFFFFF', 'deltaet':design_tokens.RED_300,
+             'deltabt':design_tokens.NAVY_200, 'sv':design_tokens.DARK_FG_SECONDARY,
+             'rstimer':design_tokens.NAVY_200, 'slowcoolingtimer':design_tokens.RED_300}
+    else:
+        b = {'timer':design_tokens.WARM_100, 'et':design_tokens.RED_600,
+             'bt':design_tokens.NAVY_700, 'deltaet':design_tokens.WARM_200,
+             'deltabt':design_tokens.WARM_200, 'sv':design_tokens.WARM_100,
+             'rstimer':design_tokens.WARM_100, 'slowcoolingtimer':design_tokens.WARM_100}
+        f = {'timer':design_tokens.NAVY_900, 'et':'#FFFFFF',
+             'bt':'#FFFFFF', 'deltaet':design_tokens.RED_600,
+             'deltabt':design_tokens.NAVY_700, 'sv':design_tokens.WARM_700,
+             'rstimer':design_tokens.NAVY_700, 'slowcoolingtimer':design_tokens.RED_600}
+    return b, f
 
 
 import os
@@ -303,6 +331,12 @@ class Artisan(QtSingleApplication):
                     if all(aw.qmc.palette.get(_k) == _v for _k, _v in _prev_default.items()):
                         aw.qmc.palette.update(myspresso_default_palette(self.darkmode))
                         aw.updateCanvasColors()
+                    _lb_prev, _lf_prev = myspresso_default_lcdpalettes(was_dark)
+                    if aw.lcdpaletteB == _lb_prev and aw.lcdpaletteF == _lf_prev:
+                        _nb, _nf = myspresso_default_lcdpalettes(self.darkmode)
+                        aw.lcdpaletteB.update(_nb)
+                        aw.lcdpaletteF.update(_nf)
+                    aw.myspressoApplyMainLCDStyles()
                 except Exception as e: # pylint: disable=broad-except
                     _log.exception(e)
                 QTimer.singleShot(500, aw.updateScheduleSignal.emit) # only redraw scheduler window # to adjust the colors of its items (QWidgets are updated automatically)
@@ -1914,26 +1948,12 @@ class ApplicationWindow(QMainWindow):
         # (CHART_TE for ET, CHART_BT for BT, warm tones for backgrounds).
         # See src/artisanlib/design_tokens.py for the colour reference.
         #lcd1 = time, lcd2 = met, lcd3 = bt, lcd4 = roc et, lcd5 = roc bt, lcd6 = sv (extra devices lcd same as sv settings)
-        self.lcdpaletteB:dict[str,str] = {
-            'timer':'#FAF8F4',           # warm.100 — light warm canvas
-            'et':'#A8392E',              # red.600 — bean/env temp
-            'bt':'#0F1E3D',              # navy.700 — drum temp
-            'deltaet':'#F2EFE7',         # warm.200
-            'deltabt':'#F2EFE7',         # warm.200
-            'sv':'#FAF8F4',              # warm.100
-            'rstimer':'#FAF8F4',
-            'slowcoolingtimer':'#FAF8F4',
-            }
-        self.lcdpaletteF:dict[str,str] = {
-            'timer':'#070D1F',           # navy.900 — main display
-            'et':'#FFFFFF',
-            'bt':'#FFFFFF',
-            'deltaet':'#A8392E',         # red.600 (delta ET rate)
-            'deltabt':'#0F1E3D',         # navy.700 (delta BT rate)
-            'sv':'#4E4A44',              # warm.700
-            'rstimer':'#0F1E3D',
-            'slowcoolingtimer':'#A8392E',
-            }
+        # Fork LCD colour defaults (see myspresso_default_lcdpalettes). Light
+        # at construction; promoted to the dark defaults after settings load
+        # when the OS scheme is dark and the user never customised them.
+        self.lcdpaletteB:dict[str,str]
+        self.lcdpaletteF:dict[str,str]
+        self.lcdpaletteB, self.lcdpaletteF = myspresso_default_lcdpalettes(False)
 
         #user defined event buttons
         self.extraeventsbuttonsflags:list[int] = [0,1,1] # extra button visibility per state OFF, ON, START
@@ -3929,7 +3949,7 @@ class ApplicationWindow(QMainWindow):
 #        self.AUClcdFrame.setFrameStyle(QFrame.Shadow.Plain)
         self.AUClcd.setNumDigits(3)
         self.AUClcd.setMinimumWidth(65)
-        self.AUClcdFrame.setStyleSheet(f'MyQLCDNumber{{ color: {design_tokens.NAVY_900}; background-color: {design_tokens.WARM_200}; }}')
+        self.AUClcdFrame.setStyleSheet(f'MyQLCDNumber{{ color: {current_semantic_tokens().fg_primary}; background-color: {current_semantic_tokens().surface_alt}; }}')
 
         AUCLayout = QHBoxLayout()
         AUCLayout.addSpacing(20)
@@ -6774,6 +6794,22 @@ class ApplicationWindow(QMainWindow):
             return '#ffffff'
         return '#000000'
 
+    def myspressoApplyMainLCDStyles(self) -> None:
+        """(Re-)apply the main/extra/phase LCD styles from the current
+        palettes and theme tokens. Called when the OS colour scheme flips."""
+        for lcd, key in ((self.lcd1,'timer'), (self.lcd2,'et'), (self.lcd3,'bt'),
+                         (self.lcd4,'deltaet'), (self.lcd5,'deltabt'),
+                         (self.lcd6,'sv'), (self.lcd7,'sv')):
+            lcd.setStyleSheet(f"QLCDNumber {{ border-radius: 4; color: {rgba_colorname2argb_colorname(self.lcdpaletteF[key])}; background-color: {rgba_colorname2argb_colorname(self.lcdpaletteB[key])};}}")
+        for i, _ in enumerate(self.extraLCD1):
+            self.extraLCD1[i].setStyleSheet(f"QLCDNumber {{ border-radius: 4; color: {rgba_colorname2argb_colorname(self.lcdpaletteF['sv'])}; background-color: {rgba_colorname2argb_colorname(self.lcdpaletteB['sv'])};}}")
+        for i, _ in enumerate(self.extraLCD2):
+            self.extraLCD2[i].setStyleSheet(f"QLCDNumber {{ border-radius: 4; color: {rgba_colorname2argb_colorname(self.lcdpaletteF['sv'])}; background-color: {rgba_colorname2argb_colorname(self.lcdpaletteB['sv'])};}}")
+        tok = current_semantic_tokens()
+        phases_style = f'MyQLCDNumber{{ color: {tok.fg_primary}; background-color: {tok.surface_alt}; }}'
+        for frame in (self.TPlcdFrame, self.DRYlcdFrame, self.FCslcdFrame, self.AUClcdFrame):
+            frame.setStyleSheet(phases_style)
+
     def setLCDsBW(self) -> None:
         self.lcdpaletteB['timer'] = '#000000'
         self.lcdpaletteF['timer'] = '#ffffff'
@@ -8310,7 +8346,7 @@ class ApplicationWindow(QMainWindow):
         LCDVbox.addSpacing(5)
         LCDVbox.setSpacing(0)
         LCDVbox.setContentsMargins(0, 0, 0, 0)
-        frame.setStyleSheet(f'MyQLCDNumber{{ color: {design_tokens.NAVY_900}; background-color: {design_tokens.WARM_200}; }}')
+        frame.setStyleSheet(f'MyQLCDNumber{{ color: {current_semantic_tokens().fg_primary}; background-color: {current_semantic_tokens().surface_alt}; }}')
 #        frame.setFrameShadow(QFrame.Shadow.Sunken)
 #        frame.setLineWidth(1)
 #        frame.setFrameShape(QFrame.Shape.Panel)
@@ -18835,6 +18871,22 @@ class ApplicationWindow(QMainWindow):
             if settings.contains('LEDColors'):
                 for (k, v) in list(settings.value('LEDColors').items()):
                     self.lcdpaletteF[str(k)] = s2a(toString(v))
+            # MySpresso: when the OS scheme is dark and the loaded colours are
+            # still the fork's LIGHT defaults, promote them to the dark
+            # defaults. Customised colours are never touched.
+            try:
+                if self.app.darkmode:
+                    from artisanlib.canvas import MYSPRESSO_GRAPH_PALETTE_LIGHT, myspresso_default_palette  # noqa: PLC0415
+                    if all(self.qmc.palette.get(_k) == _v
+                           for _k, _v in MYSPRESSO_GRAPH_PALETTE_LIGHT.items()):
+                        self.qmc.palette.update(myspresso_default_palette(True))
+                    _light_b, _light_f = myspresso_default_lcdpalettes(False)
+                    if self.lcdpaletteB == _light_b and self.lcdpaletteF == _light_f:
+                        _dark_b, _dark_f = myspresso_default_lcdpalettes(True)
+                        self.lcdpaletteB.update(_dark_b)
+                        self.lcdpaletteF.update(_dark_f)
+            except Exception as e: # pylint: disable=broad-except
+                _log.exception(e)
             if settings.contains('Alphas'):
                 for (k, v) in list(settings.value('Alphas').items()):
                     self.qmc.alpha[str(k)] = v

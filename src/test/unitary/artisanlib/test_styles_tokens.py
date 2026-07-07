@@ -45,3 +45,18 @@ def test_load_qss_fully_resolved() -> None:
     assert not leftovers, f'unresolved placeholders after load_qss(): {sorted(set(leftovers))}'
     # spot-check: the app background token must be present, resolved
     assert design_tokens.WARM_100 in qss
+
+
+def test_load_qss_resolves_theme_at_load_time() -> None:
+    """[theme="dark"] attribute selectors can never match (the property sits
+    on the QApplication, not on an ancestor widget) — load_qss() must fold
+    them in (dark) or drop them (light)."""
+    light = load_qss(False)
+    dark = load_qss(True)
+    assert '[theme=' not in light
+    assert '[theme=' not in dark
+    # light drops the dark rules entirely
+    assert design_tokens.DARK_BG not in light
+    # dark keeps them as unconditional overrides (cascade: last wins)
+    assert design_tokens.DARK_BG in dark
+    assert dark.rindex(design_tokens.DARK_BG) > dark.index(design_tokens.WARM_100)

@@ -87,6 +87,15 @@ _ICONS_DIR = pathlib.Path(__file__).parent.parent.parent / 'icons' / 'myspresso'
 
 _TOKEN_RE = re.compile(r'@([A-Z][A-Z0-9_]*)@')
 
+# Dark-mode rules are written as `[theme="dark"] <selector> { ... }` in the
+# template. Qt attribute selectors need the property on an ANCESTOR WIDGET —
+# a property set on the QApplication never matches, so these rules are
+# resolved at LOAD TIME instead: in dark mode the prefix is stripped (the
+# rules sit at the end of the file, so the cascade lets them override); in
+# light mode the whole rules are dropped.
+_DARK_PREFIX_RE = re.compile(r'\[theme="dark"\]\s*')
+_DARK_RULE_RE = re.compile(r'\[theme="dark"\][^{}]*\{[^{}]*\}\s*')
+
 
 def _token_values() -> dict[str, str]:
     """All string tokens exported by design_tokens, keyed by name."""
@@ -97,20 +106,26 @@ def _token_values() -> dict[str, str]:
     }
 
 
-def load_qss() -> str:
-    """Return the QSS string. Empty string if the file cannot be read.
+def load_qss(dark: bool = False) -> str:
+    """Return the QSS string resolved for the requested theme.
+    Empty string if the file cannot be read.
 
     The QSS file is a template: ``@TOKEN@`` placeholders are resolved
     against ``design_tokens`` so the token module stays the single source
-    of truth. Also substitutes the relative ``"../icons/myspresso/X"``
-    references with absolute paths so Qt's ``url()`` resolver works
-    regardless of the app's current working directory.
+    of truth, and the ``[theme="dark"]`` rules are folded in (dark) or
+    dropped (light) — see the note on ``_DARK_PREFIX_RE``. Also
+    substitutes the relative ``"../icons/myspresso/X"`` references with
+    absolute paths so Qt's ``url()`` resolver works regardless of the
+    app's current working directory.
     """
     try:
         qss = _QSS_PATH.read_text(encoding='utf-8')
     except OSError as exc:
         _log.warning('failed to load %s: %s', _QSS_PATH, exc)
         return ''
+    qss = _DARK_PREFIX_RE.sub('', qss) if dark else _DARK_RULE_RE.sub('', qss)
+    if '[theme=' in qss:
+        _log.error('unresolved [theme=...] selectors survived QSS resolution')
     tokens = _token_values()
 
     def _resolve(m: re.Match[str]) -> str:
@@ -166,10 +181,11 @@ def apply_myspresso_stylesheet(app: QApplication) -> None:
         _log.info('MYSPRESSO_STYLE_DISABLED=true — skipping stylesheet')
         return
     load_bundled_fonts()
-    qss = load_qss()
+    dark = is_dark_mode(app)
+    qss = load_qss(dark)
     if not qss:
         return
-    theme = 'dark' if is_dark_mode(app) else 'light'
+    theme = 'dark' if dark else 'light'
     app.setProperty('theme', theme)
     app.setStyleSheet(qss)
     style = app.style()

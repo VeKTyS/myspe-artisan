@@ -712,6 +712,7 @@ QToolTip {
 [theme="dark"] QTabBar::tab           { color: @DARK_FG_SECONDARY@; }
 [theme="dark"] QTabBar::tab:selected  { color: @DARK_FG_PRIMARY@; border-bottom-color: @RED_300@; }
 [theme="dark"] QTabWidget::pane       { border-color: @DARK_BORDER@; }
+[theme="dark"] QDialog QGroupBox,
 [theme="dark"] QGroupBox              { border-top-color: @DARK_BORDER@; }
 [theme="dark"] QGroupBox::title       {
     color: @DARK_FG_PRIMARY@;
