@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import QApplication
 from typing import override, Final, TypedDict, IO, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from artisanlib.main import ApplicationWindow # pylint: disable=unused-import
     from artisanlib.atypes import SerialSettings, ComputedProfileInformation # pylint: disable=unused-import
 
 from artisanlib.async_comm import AsyncComm, IteratorReader
@@ -62,6 +63,7 @@ class State(TypedDict, total=False):
 
 class Orbiter(AsyncComm):
 
+    BT_CUTOFF_TEMP:Final[int] = 250 # on BT temperatures beyond this temperature limit (in C) the heater power is set to zero
     HEADER:Final[bytes] = b'\xFF\xFF'
     EVENT:Final[bytes] = b'\x00'
     CMD_SYNC:Final[bytes] = b'\x00'
@@ -71,7 +73,7 @@ class Orbiter(AsyncComm):
     __slots__ = [ 'send_timeout', 'connected', 'outer_connected_handler', 'outer_disconnected_handler',
             '_BT', '_ET', '_IT', '_DT', '_air', '_drum', '_damper', '_heater', '_sound', '_RoR', '_master_control',
             '_SERIAL',  '_FW_VERSION', '_PCB_VERSION', '_DASHBOARD_STATUS', '_MODEL', '_MODEL_NUM',
-            'isRoaster_Roasting' ]
+            'isRoaster_Roasting', 'isRoaster_Cooling' ]
 
     def __init__(self, serial:'SerialSettings',
                 connected_handler:Callable[[], None]|None = None,
@@ -112,6 +114,7 @@ class Orbiter(AsyncComm):
         self._MODEL_NUM:int = 0                    # 1 byte
         # machine status
         self.isRoaster_Roasting:bool = False
+        self.isRoaster_Cooling:bool = False
 
     def connected_handler(self) -> None:
         self.connected = True
@@ -133,8 +136,14 @@ class Orbiter(AsyncComm):
 
     # getBT triggers fetching a complete set of new readings
     # time is the preheat/roasting/cooling time in seconds send along the sync command to the machine
-    def getBT(self, time:int = 0) -> float:
+    def getBT(self, aw:'ApplicationWindow|None' = None, time:int = 0) -> float:
         self.send_sync_await(time)
+        # check for critical cut of temperature and turn OFF the heater if needed
+        if aw is not None and self._BT > self.BT_CUTOFF_TEMP:
+            orbiter_cmd:bytes = bytes.fromhex('0D') # heater
+            orbiter_data:bytes = b'\x00\x00' # 0%
+            orbiter_param:bytes = b'\x00'
+            aw.orbiterSendMessageSignal.emit(orbiter_cmd, orbiter_data, orbiter_param, time)
         return self._BT
     def getET(self) -> float:
         return self._ET
@@ -206,7 +215,12 @@ class Orbiter(AsyncComm):
                         dashboard_state = data[3:5]
                         dashboard_state_low = dashboard_state[0]
                         #
-#                        self.isRoaster_Cooling = self.test_bit(dashboard_state_low, 3)
+                        self.isRoaster_Cooling = self.test_bit(dashboard_state_low, 3)
+#                        if self.isRoaster_Cooling:
+#                            _log.debug("isRoaster_Cooling")
+#                        else:
+#                            _log.debug("NOT isRoaster_Cooling")
+                        #
                         self.isRoaster_Roasting = self.test_bit(dashboard_state_low, 2)
 #                        if self.isRoaster_Roasting:
 #                            _log.debug("isRoaster_Roasting")

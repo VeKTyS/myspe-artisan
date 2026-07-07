@@ -80,6 +80,7 @@ def appFrozen() -> bool:
         _log.exception(e)
     return ib
 
+@functools.lru_cache
 def signature_message(version:str, revision:str, artisan_os:str) -> bytes:
     return bytes(f'{version}{revision}{artisan_os}', encoding='ascii')
 
@@ -713,9 +714,15 @@ def weightVolumeDigits(v:float) -> int:
         return 3
     return 4
 
+
+def round_base(x:float, base:int = 5) -> int:
+    return base * round(x/base)
+
+
 def float2floatWeightVolume(v:float) -> float:
     d = weightVolumeDigits(v)
     return float2float(v,d)
+
 
 # the int n specifies the number of digits
 def float2floatNone(f:float|None, n:int=1) -> float|None:

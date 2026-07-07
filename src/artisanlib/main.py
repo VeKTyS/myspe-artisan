@@ -123,7 +123,7 @@ try: # activate support for hiDPI screens on Windows
 except Exception: # pylint: disable=broad-except
     pass
 
-# write logtrace to Console on OS X:
+# write logtrace to Console on macOS:
 #try:
 #..
 #except Exception as e: # pylint: disable=broad-except
@@ -1530,7 +1530,7 @@ class ApplicationWindow(QMainWindow):
         'taskWebDisplayGreenActive', 'taskWebDisplayGreenPort', 'taskWebDisplayRoastedActive', 'taskWebDisplayRoastedPort',
         'taskWebDisplayRoastedIndexPath', 'taskWebDisplayRoastedWebSocketPath', 'taskWebDisplayGreen_server', 'taskWebDisplayRoasted_server',
         'custom_scale_ids', 'custom_scale_names',
-        'scale_manager', 'scale1_model', 'scale1_name', 'scale1_id', 'container1_idx', 'two_bucket_mode', 'green_task_precision', 'scale2_model', 'scale2_name', 'scale2_id', 'container2_idx',
+        'scale_manager', 'scale1_model', 'scale1_name', 'scale1_id', 'container1_idx', 'two_bucket_mode', 'green_task_precision', 'scale2_model', 'scale2_name', 'scale2_id', 'container2_idx', 'scale1_dedicated_for_green_only', 'scale2_dedicated_for_roasted_only',
         'WebLCDsAlerts', 'EventsDlg_activeTab', 'graphColorDlg_activeTab', 'PID_DlgControl_activeTab', 'CurveDlg_activeTab', 'editGraphDlg_activeTab',
         'backgroundDlg_activeTab', 'DeviceAssignmentDlg_activeTab', 'AlarmDlg_activeTab', 'schedule_activeTab', 'StatisticsDlg_activeTab', 'resetqsettings', 'settingspath', 'wheelpath', 'profilepath',
         'userprofilepath', 'printer', 'main_widget', 'defaultdpi', 'dpi', 'qmc', 'HottopControlActive', 'AsyncSamplingTimer', 'wheeldialog',
@@ -1703,9 +1703,6 @@ class ApplicationWindow(QMainWindow):
         self.scheduler_filters_visible:bool = False # scheduler filter pane visible?
         self.scheduler_auto_open:bool = True # if set the scheduler is activated (window opened) automatically if there are scheduled items
 
-        # initialize the BBP metrics
-        self.resetBBPMetrics()
-
         # large LCDs
         self.largeLCDs_dialog:LargeMainLCDs|None = None
         self.LargeLCDsFlag:bool = False
@@ -1744,12 +1741,17 @@ class ApplicationWindow(QMainWindow):
         self.scale1_id:str|None = None    # the id, eg. the BT address (like "24:71:89:cc:09:05")
         self.container1_idx:int = -1 # -1: no container set; otherwise index into selected qmc.container_names/qmc.container_weights
         self.two_bucket_mode:bool = False # if True, the TaskManager allows to split green task weight into two buckets
+        self.scale1_dedicated_for_green_only:bool = False
+        self.scale2_dedicated_for_roasted_only:bool = False
         self.green_task_precision:float = 10 # precision in percent (range [0.1 - 10%]; if set to 0 all "non-overlapping" weights are accepted)
         # scale2: just for green
         self.scale2_model:int|None = None
         self.scale2_name:str|None = None  # the display/local name of the device (like "ACAIA162FC")
         self.scale2_id:str|None = None    # the device id, eg. the BT address (like "24:71:89:cc:09:05")
         self.container2_idx:int = -1 # -1: no container set; otherwise index into selected qmc.container_names/qmc.container_weights
+
+        # perdod after which roasted batches are automatically registered in seconds
+        self.automatic_registration_period:int = 0
 
         # active tab
         self.EventsDlg_activeTab:int = 0
@@ -5050,6 +5052,9 @@ class ApplicationWindow(QMainWindow):
                 self.custom_scale_names.append(name)
             except Exception as e: # pylint: disable=broad-except
                 _log.exception(e)
+        # we update the names of scales on the LargeScaleLCDs
+        self.updateScale1name()
+        self.updateScale2name()
 
     def getScaleName(self, scale_device:'ScaleSpec') -> str:
         custom_name = self.get_custom_scale_name(scale_device[1])
@@ -6036,6 +6041,7 @@ class ApplicationWindow(QMainWindow):
         if not self.qmc.flagstart or self.qmc.title_show_always:
             self.qmc.setProfileTitle(self.qmc.title,updatebackground=True)
         self.qmc.weight = (rr['weightIn'],self.qmc.weight[1],rr['weightUnit'])
+        self.qmc.end_weight_est = 0
         if 'weightOut' in rr:
             self.qmc.weight = (self.qmc.weight[0],rr['weightOut'],rr['weightUnit'])
         else:
@@ -6496,6 +6502,7 @@ class ApplicationWindow(QMainWindow):
                             weight_unit = self.qmc.weight[2]
                             self.qmc.last_batchsize = convertWeight(self.qmc.roastersize_setup,1,0) # nominal batch size in g
                             nominal_batch_size = convertWeight(self.qmc.roastersize_setup,1,weight_units.index(weight_unit))
+                            self.qmc.end_weight_est = 0
                             self.qmc.weight = (nominal_batch_size,0,weight_unit)
                         # size set, ask for heating
                         resi:int|None
@@ -6579,6 +6586,7 @@ class ApplicationWindow(QMainWindow):
                         self.sendmessage(QApplication.translate('Message','Action canceled'))
                     else:
                         # setup not canceled, we establish the last_batchsize
+                        self.qmc.end_weight_est = 0
                         self.qmc.weight = (convertWeight(self.qmc.last_batchsize,0,weight_units.index(self.qmc.weight[2])),0,self.qmc.weight[2])
                     self.establish_etypes()
                 self.qmc.redraw(False,False)
@@ -6762,7 +6770,7 @@ class ApplicationWindow(QMainWindow):
 
 
     def colorDifference(self, color1:str|None, color2:str|None) -> float:
-        cDiff = 100
+        cDiff:float = 100
         try:
             from colorspacious import deltaE # type: ignore[import-untyped]
             if color1 is None or color1 == 'None':
@@ -6783,7 +6791,7 @@ class ApplicationWindow(QMainWindow):
             c2 = QColor(color2[:7]).name()
             c1_rgb = tuple(int(c1[i:i+2], 16) for i in (1, 3 ,5))
             c2_rgb = tuple(int(c2[i:i+2], 16) for i in (1, 3 ,5))
-            cDiff = deltaE(c1_rgb, c2_rgb, input_space='sRGB255', uniform_space='CIELab')
+            cDiff = float(deltaE(c1_rgb, c2_rgb, input_space='sRGB255', uniform_space='CIELab'))
         except Exception as e: # pylint: disable=broad-except
             _log.exception(e)
             _, _, exc_tb = sys.exc_info()
@@ -6836,7 +6844,7 @@ class ApplicationWindow(QMainWindow):
             nc_greyscale_JCh[..., 1] = 0
             nc_greyscale_sRGB:numpy.ndarray[tuple[Literal[1]],numpy.dtype[numpy.double]] = cspace_convert(nc_greyscale_JCh, 'JCh', 'sRGB255')
             nc_greyscale_sRGB = numpy.clip(nc_greyscale_sRGB, 0, 255) # pyright:ignore[reportUnknownArgumentType]
-            nc_greyscale = f'#{int(nc_greyscale_sRGB[0]):2x}{int(nc_greyscale_sRGB[1]):2x}{int(nc_greyscale_sRGB[2]):2x}'
+            nc_greyscale = f'#{int(nc_greyscale_sRGB[0]):2x}{int(nc_greyscale_sRGB[1]):2x}{int(nc_greyscale_sRGB[2]):2x}' # pyright:ignore[reportUnknownArgumentType]
             nc = str(QColor(nc_greyscale).name())
         except Exception as e: # pylint: disable=broad-except
             _log.exception(e)
@@ -7614,10 +7622,11 @@ class ApplicationWindow(QMainWindow):
             self.largePhasesLCDs_dialog.updatePhasesLabels([None,None,None,label])
         self.updateAUCLCD()
 
+    # color dialogs without buttons (noButtons=True) only supported on macOS for now
     def colordialog(self, c:QColor, noButtons:bool=False, parent:QWidget|None = None, alphasupport:bool=False) -> QColor:
         if parent is None:
             parent = self
-        if platform.system() == 'Darwin' and noButtons:
+        if platform.system() == 'Darwin' and noButtons: # used to specify extra device colors in devices.py
             cd = QColorDialog(parent)
             cd.setModal(True)
             cd.setWindowModality(Qt.WindowModality.ApplicationModal)
@@ -7628,7 +7637,6 @@ class ApplicationWindow(QMainWindow):
             cd.setCurrentColor(c)
             cd.exec()
             return cd.currentColor()
-#        return QColorDialog.getColor(c)
         return QColorDialog.getColor(c, parent, '',
             (QColorDialog.ColorDialogOption.ShowAlphaChannel if alphasupport else
                 QColorDialog.ColorDialogOption(0)))
@@ -8026,10 +8034,10 @@ class ApplicationWindow(QMainWindow):
             # build table of general information
             tbl2 = prettytable.PrettyTable()
             tbl2.field_names = [ 'A','A1', 'B', 'B1'  ]
-            tbl2.align['A'] = 'l'
-            tbl2.align['A1'] = 'r'
-            tbl2.align['B'] = 'l'
-            tbl2.align['B1'] = 'r'
+            tbl2.align['A'] = 'l'   # pylint: disable=unsupported-assignment-operation
+            tbl2.align['A1'] = 'r'  # pylint: disable=unsupported-assignment-operation
+            tbl2.align['B'] = 'l'   # pylint: disable=unsupported-assignment-operation
+            tbl2.align['B1'] = 'r'  # pylint: disable=unsupported-assignment-operation
             tbl2.float_format = '5.2'
             tbl2.add_row([QApplication.translate('Label','Curve Fit'), fitType, bgAlignLabel, bgAlignType])
             tbl2.add_row([QApplication.translate('Label','Samples Threshold'), self.qmc.segmentsamplesthreshold, QApplication.translate('Label','Delta Threshold'), self.qmc.segmentdeltathreshold])
@@ -8120,7 +8128,7 @@ class ApplicationWindow(QMainWindow):
                 try:
                     # we masked the -1 error values
                     np_etb_masked = numpy.ma.masked_equal(np_etb, -1)
-                    np_timeB_etb_masked = numpy.ma.masked_array(np_timeB, np_etb_masked.mask) # pylint:disable=no-member
+                    np_timeB_etb_masked = numpy.ma.masked_array(np_timeB, np_etb_masked.mask) # type:ignore[operator,unused-ignore] # ty:ignore[call-non-callable] # pylint:disable=no-member
                     # ignore the masked error values on computing the interpolation and fill (especially on the left) with -1 values
                     interp_np_etb = numpy.interp(np_timex,np_timeB_etb_masked.compressed(),np_etb_masked.compressed(),left=-1,right=-1) # pyright:ignore[reportUnknownArgumentType]  # pylint:disable=no-member
 
@@ -8145,7 +8153,7 @@ class ApplicationWindow(QMainWindow):
                 try:
                     # we masked the -1 error values
                     np_btb_masked = numpy.ma.masked_equal(np_btb, -1)
-                    np_timeB_btb_masked = numpy.ma.masked_array(np_timeB, np_btb_masked.mask) # pylint:disable=no-member
+                    np_timeB_btb_masked = numpy.ma.masked_array(np_timeB, np_btb_masked.mask) # type:ignore[operator,unused-ignore] # ty:ignore[call-non-callable] # pylint:disable=no-member
                     # ignore the masked error values on computing the interpolation and fill (especially on the left) with -1 values
                     interp_np_btb = numpy.interp(np_timex,np_timeB_btb_masked.compressed(),np_btb_masked.compressed(),left=-1,right=-1) # pyright:ignore[reportUnknownArgumentType]  # pylint:disable=no-member
 
@@ -12981,8 +12989,8 @@ class ApplicationWindow(QMainWindow):
                             self.sendmessage(QApplication.translate('Message','Auto Axis Graph Mode is off'))
                 elif self.buttonpalette_shortcuts and control_modifier and k in numberkeys: # palette switch via COMMAND-NUM-Keys
                     self.setbuttonsfrom(numberkeys.index(Qt.Key(k)), only_non_empty=True)
-                elif k == Qt.Key.Key_J and no_modifier: # 74:       #J (toggle Playback Events)
-                    self.togglePlaybackEvents()
+#                elif k == Qt.Key.Key_J and no_modifier: # 74:       #J (toggle Playback Events) # deactivated as it might be activated accidentally
+#                    self.togglePlaybackEvents()
                 elif k == Qt.Key.Key_I and no_modifier: # 73:       #I (toggle foreground showfull flag)
                     self.toggleForegroundShowfullFlag()
                 elif k == Qt.Key.Key_O and no_modifier: # 79:       #O (toggle background showfull flag)
@@ -14206,7 +14214,7 @@ class ApplicationWindow(QMainWindow):
     def loadFileSlot(self, filename:str) -> None:
         self.loadFile(filename)
 
-    #loads stored profiles. Called from file menu
+    #loads stored profiles. Called from file menu (NOTE: background profile is not loaded if quiet=True!)
     def loadFile(self, filename:str, quiet:bool = False) -> None:
         if self.comparator is not None or self.qmc.designerflag or self.qmc.wheelflag or self.qmc.ax is None:
             # only load a profile if not in Comparator/Designer/WheelChart/FlavorChart mode
@@ -14214,8 +14222,7 @@ class ApplicationWindow(QMainWindow):
         f:QFile|None = None
         try:
             f = QFile(filename)
-            if self.qmc.clearBgbeforeprofileload:
-                self.deleteBackground()
+            firstChar:str = ''
             if not f.open(QFile.OpenModeFlag.ReadOnly):
                 raise OSError(f.errorString())
             stream = QTextStream(f)
@@ -14224,6 +14231,8 @@ class ApplicationWindow(QMainWindow):
             if firstChar != '{':
                 self.sendmessage(QApplication.translate('Message','Invalid artisan format'))
                 return
+            if self.qmc.clearBgbeforeprofileload:
+                self.deleteBackground()
             res = self.qmc.reset(redraw=False,soundOn=False)
             obj_dict = deserialize(filename)
             self.plusAddPath(obj_dict, filename)
@@ -14367,6 +14376,8 @@ class ApplicationWindow(QMainWindow):
         finally:
             if f is not None:
                 f.close()
+
+
 
     def loadAlarmsFromProfile(self, filename:str, profile:'ProfileData') -> None:
         self.qmc.alarmsfile = filename
@@ -14678,8 +14689,8 @@ class ApplicationWindow(QMainWindow):
             self.qmc.adderror((QApplication.translate('Error Message', 'Exception:') + ' calcVirtualdevices() {0}').format(str(ex)),getattr(exc_tb, 'tb_lineno', '?'))
         return False
 
-    def loadAndRedrawBackgroundUUID(self, filename:str|None = None, UUID:str|None = None, force_reload:bool=True) -> None:
-        if self.loadbackgroundUUID(filename, UUID, force_reload):
+    def loadAndRedrawBackgroundUUID(self, filename:str|None = None, UUID:str|None = None, force_reload:bool=True, verbose:bool=False) -> None:
+        if self.loadbackgroundUUID(filename, UUID, force_reload, verbose):
             try:
                 self.qmc.background = not self.qmc.hideBgafterprofileload
                 self.qmc.timealign(redraw=False)
@@ -14694,7 +14705,7 @@ class ApplicationWindow(QMainWindow):
 
     # tries to load background from the given path, if that fails try to deref the given UUID
     # returns True on success, Fail otherwise
-    def loadbackgroundUUID(self, filename:str|None = None, UUID:str|None = None, force_reload:bool=True) -> bool:
+    def loadbackgroundUUID(self, filename:str|None = None, UUID:str|None = None, force_reload:bool=True, verbose:bool=False) -> bool:
         if self.comparator is not None or self.qmc.designerflag or self.qmc.wheelflag or self.qmc.ax is None:
             # only load a background profile if not in Comparator/Designer/WheelChart/FlavorChart mode
             return False
@@ -14711,8 +14722,12 @@ class ApplicationWindow(QMainWindow):
                     self.loadbackground(filepath)
                     return True
                 except Exception: # pylint: disable=broad-except
+                    if verbose:
+                        self.sendmessageSignal.emit(f"{QApplication.translate('Message', 'Loading background template failed')}: {filepath}",True,None)
                     return False
             else:
+                if verbose:
+                    self.sendmessageSignal.emit(f"{QApplication.translate('Message', 'Loading background template failed')}: {UUID}",True,None)
                 return False
         else:
             return False
@@ -14780,19 +14795,45 @@ class ApplicationWindow(QMainWindow):
                     res[i] = self.qmc.get_etype_default(i, default_etypes_set)
         return res
 
-    # Loads background profile
-    # NOTE: this does NOT set the self.qmc.background flag to make the loaded background visible.
-    def loadbackground(self, filename:str, quiet:bool = True) -> None: # pyright: ignore[reportGeneralTypeIssues] # code to complex to analyze
+    @staticmethod
+    def loadableProfile(filename:str) -> bool:
         f:QFile|None = None
         try:
             f = QFile(filename)
             if not f.open(QIODevice.OpenModeFlag.ReadOnly):
                 raise OSError(f.errorString())
             stream = QTextStream(f)
-
-            firstChar = stream.read(1)
-            if firstChar == '{':
+            try:
+                firstChar = stream.read(1)
+                # if file is just a GoogleDrive/DropBox offline stubs firstChar==''
+                if firstChar == '{':
+                    return True
+            except Exception:
+                pass
+            finally:
                 f.close()
+            stream = QTextStream(f)
+            # we try again, hoping that the file is by now retrieved without timeout
+            try:
+                firstChar = stream.read(1)
+                # if file is just a GoogleDrive/DropBox offline stubs firstChar==''
+                if firstChar == '{':
+                    f.close()
+                    return True
+            except Exception:
+                pass
+            finally:
+                f.close()
+        except Exception:
+            pass
+        return False
+
+
+    # Loads background profile
+    # NOTE: this does NOT set the self.qmc.background flag to make the loaded background visible.
+    def loadbackground(self, filename:str, quiet:bool = True) -> None: # pyright: ignore[reportGeneralTypeIssues] # code to complex to analyze
+        if self.loadableProfile(filename):
+            try:
                 profile = deserialize(filename)
                 self.plusAddPath(profile, filename)
 
@@ -15018,6 +15059,7 @@ class ApplicationWindow(QMainWindow):
                 #  - scheduler is not active
                 if self.qmc.setBatchSizeFromBackground and (self.qmc.flagon or not self.curFile) and self.schedule_window is None:
                     self.qmc.weight = (profile['weight'][0],self.qmc.weight[1],profile['weight'][2])
+                    self.qmc.end_weight_est = 1 # this weight out is an estimate as it was not measure nor manual set
 
 
                 message = QApplication.translate('Message', 'Background {0} loaded successfully {1}').format(filename, '')
@@ -15025,31 +15067,28 @@ class ApplicationWindow(QMainWindow):
                 self.qmc.backgroundpath = str(filename)
                 self.qmc.backgroundUUID = profile.get('roastUUID', None)
                 _log.info('background profile loaded: %s', filename)
-            else:
-                self.sendmessage(QApplication.translate('Message', 'Invalid artisan format'))
-        except OSError as e:
-            _, _, exc_tb = sys.exc_info()
-            self.qmc.adderror((QApplication.translate('Error Message', 'IO Error:') + ' loadbackground() {0}').format(str(e)),getattr(exc_tb, 'tb_lineno', '?'))
-            return
+            except OSError as e:
+                _, _, exc_tb = sys.exc_info()
+                self.qmc.adderror((QApplication.translate('Error Message', 'IO Error:') + ' loadbackground() {0}').format(str(e)),getattr(exc_tb, 'tb_lineno', '?'))
+                return
 
-        except (ValidationError, InvalidSignature, InvalidProfileHash) as e:
-            # pydantic validation against ProfileData TypedDict failed
-            self.sendmessage(f"{QApplication.translate('Message','Invalid artisan format')}: {filename}")
-            _log.error(e)
+            except (ValidationError, InvalidSignature, InvalidProfileHash) as e:
+                # pydantic validation against ProfileData TypedDict failed
+                self.sendmessage(f"{QApplication.translate('Message','Invalid artisan format')}: {filename}")
+                _log.error(e)
 
-        except ValueError as e:
-            _, _, exc_tb = sys.exc_info()
-            self.qmc.adderror((QApplication.translate('Error Message', 'Value Error:') + ' loadbackground() {0}').format(str(e)),getattr(exc_tb, 'tb_lineno', '?'))
-            return
+            except ValueError as e:
+                _, _, exc_tb = sys.exc_info()
+                self.qmc.adderror((QApplication.translate('Error Message', 'Value Error:') + ' loadbackground() {0}').format(str(e)),getattr(exc_tb, 'tb_lineno', '?'))
+                return
 
-        except Exception as e: # pylint: disable=broad-except
-            _log.exception(e)
-            _, _, exc_tb = sys.exc_info()
-            self.qmc.adderror((QApplication.translate('Error Message', 'Exception:') + ' loadbackground() {0}').format(str(e)),getattr(exc_tb, 'tb_lineno', '?'))
-            return
-        finally:
-            if f is not None:
-                f.close()
+            except Exception as e: # pylint: disable=broad-except
+                _log.exception(e)
+                _, _, exc_tb = sys.exc_info()
+                self.qmc.adderror((QApplication.translate('Error Message', 'Exception:') + ' loadbackground() {0}').format(str(e)),getattr(exc_tb, 'tb_lineno', '?'))
+                return
+        else:
+            self.sendmessage(QApplication.translate('Message', 'Invalid artisan format'))
 
 
     def addSerialPort(self) -> None:
@@ -16490,8 +16529,10 @@ class ApplicationWindow(QMainWindow):
                     convertWeight(float(weight[0]), weight_unit_idx, current_weight_unit_idx),
                     convertWeight(float(weight[1]), weight_unit_idx, current_weight_unit_idx),
                     self.qmc.weight[2])
+                self.qmc.end_weight_est = profile.get('end_weight_est', 0)
             else:
                 self.qmc.weight = (0., 0., self.qmc.weight[2])
+                self.qmc.end_weight_est = 0
             #
             if 'defects_weight' in profile:
                 defects = profile['defects_weight']
@@ -17104,53 +17145,61 @@ class ApplicationWindow(QMainWindow):
         self.bbp_dropevents = []
         self.bbp_drop_to_end = 0
 
+        # clear bbpPrevRoast
+        self.qmc.bbpPrevRoast = {}
+
 
     #TODO Decide where else to display BBP metrics # pylint: disable=fixme
     # bbpCache holds data from the previous roast.  Set in cacheforBbp() which is called from OffRecorder()
-    # Needs to be called from somewhere betw CHARGE and OFF
-    def calcBBPMetrics(self,checkCache:bool=False) -> None:
+    # At CHARGE+5 the bbpCache data is copied to bbpPrevRoast
+    def calcBBPMetrics(self) -> None:
         try:
             #TODO revisit these preset times  # pylint: disable=fixme
             maxAllowedTime_fromPrevEnd_toStart = 60 #seconds, max gap time between roast recordings
             minBbpTime = 90 #seconds, the minimum amount of time recorded in the current roast before CHARGE
             # is there data from a prev roast?
-            if (self.qmc.bbpCache and checkCache and
-                    'end_roastepoch_msec' in self.qmc.bbpCache and
-                    'drop_to_end' in self.qmc.bbpCache and
-                    'drop_bt' in self.qmc.bbpCache and
-                    'drop_et' in self.qmc.bbpCache and
-                    'end_events' in self.qmc.bbpCache and
-                    'drop_events' in self.qmc.bbpCache and
-                    'drop_to_end' in self.qmc.bbpCache):
-                #_log.debug('bbpCache exists')
-                bbpGap = self.qmc.roastepoch - (self.qmc.bbpCache['end_roastepoch_msec']/1000)
-                # did the prev roast end shortly before this roast began?  If not clear bbpCache
+            if (self.qmc.bbpPrevRoast and
+                    'end_roastepoch_msec' in self.qmc.bbpPrevRoast and
+                    'drop_to_end' in self.qmc.bbpPrevRoast and
+                    'drop_bt' in self.qmc.bbpPrevRoast and
+                    'drop_et' in self.qmc.bbpPrevRoast and
+                    'end_events' in self.qmc.bbpPrevRoast and
+                    'drop_events' in self.qmc.bbpPrevRoast and
+                    'drop_to_end' in self.qmc.bbpPrevRoast):
+                bbpGap = self.qmc.roastepoch - (self.qmc.bbpPrevRoast['end_roastepoch_msec']/1000)
+                # did the prev roast end shortly before this roast began?  If not clear qmc.bbpPrevRoast
                 if bbpGap < maxAllowedTime_fromPrevEnd_toStart:
-                    self.bbp_time_added_from_prev = bbpGap + self.qmc.bbpCache['drop_to_end']
+                    self.bbp_time_added_from_prev = bbpGap + self.qmc.bbpPrevRoast['drop_to_end']
                     self.bbp_begin = 'DROP'
-                    self.bbp_dropbt = self.qmc.bbpCache['drop_bt']
-                    self.bbp_dropet = self.qmc.bbpCache['drop_et']
-                    self.bbp_endroast_epoch_msec = self.qmc.bbpCache['end_roastepoch_msec']
-                    self.bbp_endevents = self.qmc.bbpCache['end_events']
-                    self.bbp_dropevents = self.qmc.bbpCache['drop_events']
-                    self.bbp_drop_to_end = self.qmc.bbpCache['drop_to_end']
+                    self.bbp_dropbt = self.qmc.bbpPrevRoast['drop_bt']
+                    self.bbp_dropet = self.qmc.bbpPrevRoast['drop_et']
+                    self.bbp_endroast_epoch_msec = self.qmc.bbpPrevRoast['end_roastepoch_msec']
+                    self.bbp_endevents = self.qmc.bbpPrevRoast['end_events']
+                    self.bbp_dropevents = self.qmc.bbpPrevRoast['drop_events']
+                    self.bbp_drop_to_end = self.qmc.bbpPrevRoast['drop_to_end']
                 else:
-                    self.qmc.bbpCache = {}  # make empty to use as easy test later, "if self.qmc.bbpCache:"
-                    _log.debug('clearing bbpCache')
+                    self.qmc.bbpPrevRoast = {}  # make empty to use as easy test later, "if self.qmc.bbpPrevRoast:"
+
             # now calculate all the bbp data
             # does the current profile have the minimum time for bbp?
-            if (len(self.qmc.timeindex) > 0 and len(self.qmc.timex) > self.qmc.timeindex[0] > -1 and (self.qmc.timex[self.qmc.timeindex[0]] > 0) and
-                (self.qmc.timex[self.qmc.timeindex[0]] - self.qmc.timex[0] >= minBbpTime)):
+            if (len(self.qmc.timeindex) > 0 and
+                len(self.qmc.timex) > self.qmc.timeindex[0] > -1 and
+                (self.qmc.timex[self.qmc.timeindex[0]] > 0)):
+
+                # calculate the total BBP time
                 self.bbp_total_time = self.qmc.timex[self.qmc.timeindex[0]] - self.qmc.timex[0] + self.bbp_time_added_from_prev
-                # fake the events to use with findTPint
-                bbp_timeindex = [0, 0, self.qmc.timeindex[0], 0, 0, 0, self.qmc.timeindex[0], 0]
-                bbp_tpidx = findTPint(bbp_timeindex, self.qmc.timex, self.qmc.temp2)
-                if bbp_tpidx > 0:
-                    self.bbp_bottom_temp = self.qmc.temp2[bbp_tpidx]
-                    self.bbp_begin_to_bottom_time = self.qmc.timex[bbp_tpidx] - self.qmc.timex[0] + self.bbp_time_added_from_prev
-                    self.bbp_bottom_to_charge_time = self.qmc.timex[self.qmc.timeindex[0]] - self.qmc.timex[bbp_tpidx]
-                    self.bbp_begin_to_bottom_ror = 60 * (self.bbp_bottom_temp - self.qmc.temp2[0]) / (self.qmc.timex[bbp_tpidx] - self.qmc.timex[0] + self.bbp_time_added_from_prev)
-                    self.bbp_bottom_to_charge_ror = 60 * (self.qmc.temp2[self.qmc.timeindex[0]] - self.bbp_bottom_temp) / (self.qmc.timex[self.qmc.timeindex[0]] - self.qmc.timex[bbp_tpidx])
+
+                # calculate current roast metrics
+                if self.bbp_total_time >= minBbpTime:
+                    # fake the events to use with findTPint
+                    bbp_timeindex = [0, 0, self.qmc.timeindex[0], 0, 0, 0, self.qmc.timeindex[0], 0]
+                    bbp_tpidx = findTPint(bbp_timeindex, self.qmc.timex, self.qmc.temp2)
+                    if bbp_tpidx > 0:
+                        self.bbp_bottom_temp = self.qmc.temp2[bbp_tpidx]
+                        self.bbp_begin_to_bottom_time = self.qmc.timex[bbp_tpidx] - self.qmc.timex[0] + self.bbp_time_added_from_prev
+                        self.bbp_bottom_to_charge_time = self.qmc.timex[self.qmc.timeindex[0]] - self.qmc.timex[bbp_tpidx]
+                        self.bbp_begin_to_bottom_ror = 60 * (self.bbp_bottom_temp - self.qmc.temp2[0]) / (self.qmc.timex[bbp_tpidx] - self.qmc.timex[0] + self.bbp_time_added_from_prev)
+                        self.bbp_bottom_to_charge_ror = 60 * (self.qmc.temp2[self.qmc.timeindex[0]] - self.bbp_bottom_temp) / (self.qmc.timex[self.qmc.timeindex[0]] - self.qmc.timex[bbp_tpidx])
             #TODO now deal with the special events from the previous roast  # pylint: disable=fixme
 
         except Exception as e: # pylint: disable=broad-except
@@ -17517,6 +17566,7 @@ class ApplicationWindow(QMainWindow):
 
             profile['beans'] = encodeLocalStrict(self.qmc.beans)
             profile['weight'] = [self.qmc.weight[0],self.qmc.weight[1],encodeLocalStrict(self.qmc.weight[2], 'g')]
+            profile['end_weight_est'] = self.qmc.end_weight_est
             profile['defects_weight'] = self.qmc.roasted_defects_weight
             profile['volume'] = [self.qmc.volume[0],self.qmc.volume[1],encodeLocalStrict(self.qmc.volume[2], 'l')]
             profile['density'] = [self.qmc.density[0],encodeLocalStrict(self.qmc.density[1], 'g'),self.qmc.density[2],encodeLocalStrict(self.qmc.density[3], 'l')]
@@ -18576,8 +18626,8 @@ class ApplicationWindow(QMainWindow):
             if self.resetqsettings or (filename is None and QApplication.queryKeyboardModifiers() == (Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.ShiftModifier)):
                 self.resetqsettings = 0
 
-                # settings.clear()
-                # this ensures to get rid of old Artisan settings that have been retired via "Save Settings >> Factory Reset >> Load Settings"
+                # the call to settings.clear() below
+                # ensures to get rid of old Artisan settings that have been retired via "Save Settings >> Factory Reset >> Load Settings"
                 # however, settings.clear() has the consequence that recent files/settings, the starts counter and lastdonationpopup
                 # are cleared as well such that the donation popup is shown always after a Factory Reset and recent files/settings menu entries are lost
                 # thus we have to take care to preserve those over this FactoryReset here
@@ -18587,13 +18637,18 @@ class ApplicationWindow(QMainWindow):
                 starts:int|None = None
                 if settings.contains('starts'):
                     starts = toInt(settings.value('starts'))
+                # keep recent file list
+                recentFiles = toStringList(settings.value('recentFileList'))
+                # keep recentSettings
                 recentSettings = toStringList(settings.value('recentSettingList'))
                 settings.clear()
                 if lastdonationpopup is not None:
                     settings.setValue('lastdonationpopup',lastdonationpopup)
                 if starts is not None:
                     settings.setValue('starts',starts)
-                settings.setValue('recentRoasts',self.recentRoasts)
+                # reset recent file list
+                settings.setValue('recentFileList', recentFiles)
+                # reset recent settings
                 settings.setValue('recentSettingList', recentSettings)
 
 
@@ -18609,6 +18664,7 @@ class ApplicationWindow(QMainWindow):
                     pass
                 _log.info('Factory reset')
                 return True  #don't load any more settings. They could be bad (corrupted). Stop here.
+
 
             # we remember from which location we loaded the last settings file
             # to be able to update the batch counter in this file from qmc.incBatchCounter()/qmc.decBatchCounter()
@@ -18924,6 +18980,7 @@ class ApplicationWindow(QMainWindow):
             self.qmc.AUCshowFlag = toBool(settings.value('AUCshowFlag',self.qmc.AUCshowFlag))
             self.keyboardmoveflag = toInt(settings.value('keyboardmoveflag',int(self.keyboardmoveflag)))
             self.ui_mode = UI_MODE(toInt(settings.value('UI_mode',int(self.ui_mode))))
+            self.set_ui_mode(self.ui_mode)
             self.qmc.ambientTempSource = toInt(settings.value('AmbientTempSource',int(self.qmc.ambientTempSource)))
             self.qmc.ambientHumiditySource = toInt(settings.value('AmbientHumiditySource',int(self.qmc.ambientHumiditySource)))
             self.qmc.ambientPressureSource = toInt(settings.value('AmbientPressureSource',int(self.qmc.ambientPressureSource)))
@@ -19957,6 +20014,8 @@ class ApplicationWindow(QMainWindow):
                     self.scale1_id = None
             self.container1_idx = toInt(settings.value('container1_idx',int(self.container1_idx)))
             self.two_bucket_mode = toBool(settings.value('two_bucket_mode',int(self.two_bucket_mode)))
+            self.scale1_dedicated_for_green_only = toBool(settings.value('scale1_dedicated_for_green_only',int(self.scale1_dedicated_for_green_only)))
+            self.scale2_dedicated_for_roasted_only = toBool(settings.value('scale2_dedicated_for_roasted_only',int(self.scale2_dedicated_for_roasted_only)))
             self.green_task_precision = toFloat(settings.value('green_task_precision', self.green_task_precision))
             if settings.contains('scale2_model'):
                 try:
@@ -19974,6 +20033,7 @@ class ApplicationWindow(QMainWindow):
                 except Exception: # pylint: disable=broad-except
                     self.scale2_id = None
             self.container2_idx = toInt(settings.value('container2_idx',int(self.container2_idx)))
+            self.automatic_registration_period = toInt(settings.value('automatic_registration_period',int(self.automatic_registration_period)))
             settings.endGroup()
 
             # configure the two scales according to the settings just loaded
@@ -21640,11 +21700,14 @@ class ApplicationWindow(QMainWindow):
             self.settingsSetValue(settings, default_settings, 'scale1_id',self.scale1_id, read_defaults)
             self.settingsSetValue(settings, default_settings, 'container1_idx',self.container1_idx, read_defaults)
             self.settingsSetValue(settings, default_settings, 'two_bucket_mode',self.two_bucket_mode, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'scale1_dedicated_for_green_only',self.scale1_dedicated_for_green_only, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'scale2_dedicated_for_roasted_only',self.scale2_dedicated_for_roasted_only, read_defaults)
             self.settingsSetValue(settings, default_settings, 'green_task_precision',self.green_task_precision, read_defaults)
             self.settingsSetValue(settings, default_settings, 'scale2_model',self.scale2_model, read_defaults)
             self.settingsSetValue(settings, default_settings, 'scale2_name',self.scale2_name, read_defaults)
             self.settingsSetValue(settings, default_settings, 'scale2_id',self.scale2_id, read_defaults)
             self.settingsSetValue(settings, default_settings, 'container2_idx',self.container2_idx, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'automatic_registration_period',self.automatic_registration_period, read_defaults)
             settings.endGroup()
 #--- END GROUP Scales
 
@@ -25922,6 +25985,9 @@ class ApplicationWindow(QMainWindow):
             self.largePIDLCDs_dialog.close()
             self.largePIDLCDs_dialog = None
 
+
+    ### LargeScaleLCDs
+
     @pyqtSlot()
     @pyqtSlot(bool)
     def largeScaleLCDs(self, _:bool = False) -> None:
@@ -25930,10 +25996,96 @@ class ApplicationWindow(QMainWindow):
             self.largeScaleLCDs_dialog.setModal(False)
             self.LargeScaleLCDsFlag = True
             self.scalelcdsAction.setChecked(True)
+            self.updateScale1name()
+            self.updateScale2name()
+            self.scale_manager.scale1_connected_signal.connect(self.scale1connectedSlot)
+            self.scale_manager.scale1_disconnected_signal.connect(self.scale1disconnectedSlot)
+            self.scale_manager.scale1_weight_changed_signal.connect(self.scale1WeightChangedSlot)
+            self.scale_manager.scale2_connected_signal.connect(self.scale2connectedSlot)
+            self.scale_manager.scale2_disconnected_signal.connect(self.scale2disconnectedSlot)
+            self.scale_manager.scale2_weight_changed_signal.connect(self.scale2WeightChangedSlot)
             self.largeScaleLCDs_dialog.show()
         else:
+            try:
+                self.scale_manager.connect_scale1_signal.disconnect(self.scale1connectedSlot)
+            except Exception: # pylint: disable=broad-except
+                pass
+            try:
+                self.scale_manager.disconnect_scale1_signal.connect(self.scale1disconnectedSlot)
+            except Exception: # pylint: disable=broad-except
+                pass
+            try:
+                self.scale_manager.scale1_weight_changed_signal.disconnect(self.scale1WeightChangedSlot)
+            except Exception: # pylint: disable=broad-except
+                pass
+            try:
+                self.scale_manager.connect_scale2_signal.connect(self.scale2connectedSlot)
+            except Exception: # pylint: disable=broad-except
+                pass
+            try:
+                self.scale_manager.disconnect_scale2_signal.connect(self.scale2disconnectedSlot)
+            except Exception: # pylint: disable=broad-except
+                pass
             self.largeScaleLCDs_dialog.close()
             self.largeScaleLCDs_dialog = None
+
+
+    def weight2str(self, weight:int) -> str:
+        unit:int = weight_units.index(self.qmc.weight[2])
+        # metric
+        if unit == 0: # g selected
+            return str(weight)
+        if unit == 1: # kg selected
+            # metric (always keep the accuracy to the g
+            return f'{weight/1000:.3f}'
+        # non-metric
+        converted_weight:float = convertWeight(weight,0,unit)
+        return f'{converted_weight:.2f}'
+
+
+    def updateScale1name(self) -> None:
+        scale1_id:str|None = self.scale_manager.get_scale1_id()
+        if self.largeScaleLCDs_dialog is not None:
+            self.largeScaleLCDs_dialog.setScale1Name(self.get_custom_scale_name(scale1_id) if scale1_id else None)
+
+    @pyqtSlot()
+    def scale1connectedSlot(self) -> None:
+        self.updateScale1name()
+
+    @pyqtSlot()
+    def scale1disconnectedSlot(self) -> None:
+        if self.largeScaleLCDs_dialog is not None:
+            self.largeScaleLCDs_dialog.setScale1Name(None)
+        self.qmc.updateLargeScaleLCDs('')
+
+    @pyqtSlot(int)
+    def scale1WeightChangedSlot(self, weight:int) -> None:
+        self.qmc.updateLargeScaleLCDs(self.weight2str(weight))
+
+    #
+
+    def updateScale2name(self) -> None:
+        scale2_id:str|None = self.scale_manager.get_scale2_id()
+        if self.largeScaleLCDs_dialog is not None:
+            self.largeScaleLCDs_dialog.setScale2Name(self.get_custom_scale_name(scale2_id) if scale2_id else None)
+
+    @pyqtSlot()
+    def scale2connectedSlot(self) -> None:
+        scale2_id:str|None = self.scale_manager.get_scale2_id()
+        if self.largeScaleLCDs_dialog is not None:
+            self.largeScaleLCDs_dialog.setScale2Name(self.get_custom_scale_name(scale2_id) if scale2_id else None)
+
+    @pyqtSlot()
+    def scale2disconnectedSlot(self) -> None:
+        if self.largeScaleLCDs_dialog is not None:
+            self.largeScaleLCDs_dialog.setScale2Name(None)
+        self.qmc.updateLargeScaleLCDs(None, '')
+
+    @pyqtSlot(int)
+    def scale2WeightChangedSlot(self, weight:int) -> None:
+        self.qmc.updateLargeScaleLCDs(None, self.weight2str(weight))
+
+    ###
 
     @pyqtSlot()
     @pyqtSlot(bool)
@@ -28738,7 +28890,7 @@ def main() -> None:
             # we try to reload the last loaded profile or background
             if appWindow.lastLoadedProfile:
                 try:
-                    appWindow.loadFile(appWindow.lastLoadedProfile, quiet=True)
+                    appWindow.loadFile(appWindow.lastLoadedProfile)
                     if appWindow.curFile is None:
                         # load failed
                         appWindow.lastLoadedProfile = ''
