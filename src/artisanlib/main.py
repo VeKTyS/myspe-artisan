@@ -312,31 +312,28 @@ class Artisan(QtSingleApplication):
         def colorSchemeChanged(self, colorScheme:'Qt.ColorScheme') -> None:
             aw:ApplicationWindow|None = self.activationWindow()
             if aw is not None and self.darkmode != bool(colorScheme == Qt.ColorScheme.Dark):
-                was_dark = self.darkmode
                 self.darkmode = bool(colorScheme == Qt.ColorScheme.Dark)
                 # MySpresso: follow the OS scheme live — re-resolve the QSS
                 # theme property, restyle the code-styled fork widgets, and
                 # (only if the user never customised it) swap the chart palette
                 try:
-                    from artisanlib.styles import apply_myspresso_stylesheet  # noqa: PLC0415
-                    apply_myspresso_stylesheet(self)
-                    for _wname in ('myspresso_header', 'myspresso_hero',
-                                   'myspresso_pilot', 'myspresso_eventlog',
-                                   'myspresso_stats'):
-                        _w = getattr(aw, _wname, None)
-                        if _w is not None and hasattr(_w, 'restyle'):
-                            _w.restyle()
-                    from artisanlib.canvas import myspresso_default_palette  # noqa: PLC0415
-                    _prev_default = myspresso_default_palette(was_dark)
-                    if all(aw.qmc.palette.get(_k) == _v for _k, _v in _prev_default.items()):
-                        aw.qmc.palette.update(myspresso_default_palette(self.darkmode))
+                    from artisanlib.styles import apply_myspresso_stylesheet, is_effective_dark, theme_mode  # noqa: PLC0415
+                    if theme_mode() == 'system':
+                        apply_myspresso_stylesheet(self)
+                        for _wname in ('myspresso_header', 'myspresso_hero',
+                                       'myspresso_pilot', 'myspresso_eventlog',
+                                       'myspresso_stats'):
+                            _w = getattr(aw, _wname, None)
+                            if _w is not None and hasattr(_w, 'restyle'):
+                                _w.restyle()
+                        from artisanlib.canvas import myspresso_default_palette  # noqa: PLC0415
+                        _dark_eff = is_effective_dark()
+                        aw.qmc.palette.update(myspresso_default_palette(_dark_eff))
                         aw.updateCanvasColors()
-                    _lb_prev, _lf_prev = myspresso_default_lcdpalettes(was_dark)
-                    if aw.lcdpaletteB == _lb_prev and aw.lcdpaletteF == _lf_prev:
-                        _nb, _nf = myspresso_default_lcdpalettes(self.darkmode)
+                        _nb, _nf = myspresso_default_lcdpalettes(_dark_eff)
                         aw.lcdpaletteB.update(_nb)
                         aw.lcdpaletteF.update(_nf)
-                    aw.myspressoApplyMainLCDStyles()
+                        aw.myspressoApplyMainLCDStyles()
                 except Exception as e: # pylint: disable=broad-except
                     _log.exception(e)
                 QTimer.singleShot(500, aw.updateScheduleSignal.emit) # only redraw scheduler window # to adjust the colors of its items (QWidgets are updated automatically)
@@ -3104,6 +3101,11 @@ class ApplicationWindow(QMainWindow):
         #   SV +/-                         -> warm with red/navy tint
         from artisanlib import design_tokens as _ms  # noqa: PLC0415
 
+        # Themed neutrals for the button chrome (the filled navy/red states
+        # read correctly on both grounds; only the outlined/disabled neutrals
+        # need to follow the theme — cf. the mockup's dark variant).
+        _tok = current_semantic_tokens()
+
         def _btn_style(
             bg: str, bg_hover: str, bg_pressed: str,
             *, fg: str = '#FFFFFF', small: bool = False,
@@ -3123,8 +3125,8 @@ class ApplicationWindow(QMainWindow):
                 f'background-color: {bg};'
                 '}'
                 'QPushButton:!enabled {'
-                f'color: {_ms.WARM_500};'
-                f'background-color: {_ms.WARM_200};'
+                f'color: {_tok.fg_muted};'
+                f'background-color: {_tok.surface_alt};'
                 '}'
                 'QPushButton:pressed {'
                 f'color: {fg};'
@@ -3136,29 +3138,33 @@ class ApplicationWindow(QMainWindow):
                 '}'
             )
 
-        # Outlined-warm secondary button — used for RESET and idle ON button.
-        # Matches the v2 mockup pill style (warm card, navy text, thin border).
+        # Outlined secondary button — used for RESET and the idle ON button.
+        # Mockup ghost style: quiet card, thin border; navy text on the warm
+        # light ground, primary foreground on the dark ground.
+        _outlined_fg = _tok.fg_primary if _tok.dark else _ms.NAVY_700
+        _outlined_fg_active = _tok.fg_primary if _tok.dark else _ms.NAVY_900
+        _outlined_bg_active = _tok.border if _tok.dark else _ms.WARM_300
         _outlined_warm = (
             'QPushButton {'
             f'min-width: {self.main_button_min_width_str};'
             f'{border_modern}'
             f'font-size: {self.button_font_size};'
             'font-weight: 600;'
-            f'color: {_ms.NAVY_700};'
-            f'background-color: {_ms.WARM_200};'
-            f'border: 1px solid {_ms.WARM_400};'
+            f'color: {_outlined_fg};'
+            f'background-color: {_tok.surface_alt};'
+            f'border: 1px solid {_tok.border_strong};'
             '}'
             'QPushButton:!enabled {'
-            f'color: {_ms.WARM_500};'
-            f'background-color: {_ms.WARM_100};'
+            f'color: {_tok.fg_muted};'
+            f'background-color: {_tok.bg};'
             '}'
             'QPushButton:pressed {'
-            f'color: {_ms.NAVY_900};'
-            f'background-color: {_ms.WARM_300};'
+            f'color: {_outlined_fg_active};'
+            f'background-color: {_outlined_bg_active};'
             '}'
             'QPushButton:hover:!pressed {'
-            f'color: {_ms.NAVY_900};'
-            f'background-color: {_ms.WARM_300};'
+            f'color: {_outlined_fg_active};'
+            f'background-color: {_outlined_bg_active};'
             '}'
         )
 
@@ -18871,20 +18877,19 @@ class ApplicationWindow(QMainWindow):
             if settings.contains('LEDColors'):
                 for (k, v) in list(settings.value('LEDColors').items()):
                     self.lcdpaletteF[str(k)] = s2a(toString(v))
-            # MySpresso: when the OS scheme is dark and the loaded colours are
-            # still the fork's LIGHT defaults, promote them to the dark
-            # defaults. Customised colours are never touched.
+            # MySpresso: the design system owns the graph & LCD colours — at
+            # startup they are ALWAYS the token defaults of the effective
+            # theme (exactly the validated mockup, light or dark). Colours
+            # changed via Config >> Couleurs still apply for the session but
+            # reset on restart.
             try:
-                if self.app.darkmode:
-                    from artisanlib.canvas import MYSPRESSO_GRAPH_PALETTE_LIGHT, myspresso_default_palette  # noqa: PLC0415
-                    if all(self.qmc.palette.get(_k) == _v
-                           for _k, _v in MYSPRESSO_GRAPH_PALETTE_LIGHT.items()):
-                        self.qmc.palette.update(myspresso_default_palette(True))
-                    _light_b, _light_f = myspresso_default_lcdpalettes(False)
-                    if self.lcdpaletteB == _light_b and self.lcdpaletteF == _light_f:
-                        _dark_b, _dark_f = myspresso_default_lcdpalettes(True)
-                        self.lcdpaletteB.update(_dark_b)
-                        self.lcdpaletteF.update(_dark_f)
+                from artisanlib.styles import is_effective_dark  # noqa: PLC0415
+                from artisanlib.canvas import myspresso_default_palette  # noqa: PLC0415
+                _dark_eff = is_effective_dark()
+                self.qmc.palette.update(myspresso_default_palette(_dark_eff))
+                _tb, _tf = myspresso_default_lcdpalettes(_dark_eff)
+                self.lcdpaletteB.update(_tb)
+                self.lcdpaletteF.update(_tf)
             except Exception as e: # pylint: disable=broad-except
                 _log.exception(e)
             if settings.contains('Alphas'):

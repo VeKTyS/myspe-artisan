@@ -156,9 +156,8 @@ def myspresso_default_palette(dark:bool) -> dict[str,str]:
 
 def _current_scheme_is_dark() -> bool:
     try:
-        from artisanlib.styles import is_dark_mode  # noqa: PLC0415 (avoids import at Qt-less import time)
-        app = QApplication.instance()
-        return isinstance(app, QApplication) and is_dark_mode(app)
+        from artisanlib.styles import is_effective_dark  # noqa: PLC0415 (avoids import at Qt-less import time)
+        return is_effective_dark()
     except Exception: # pylint: disable=broad-except
         return False
 

@@ -157,15 +157,40 @@ def is_dark_mode(app: QApplication) -> bool:
         return False
 
 
+# MySpresso theme preference: 'system' | 'light' | 'dark'.
+# Default 'system': the app renders the validated MySpresso design in the
+# variant matching the OS scheme (the mockup artifact defines both). A user
+# can pin 'light' or 'dark' via the QSettings key 'MySpressoTheme'.
+_theme_mode: str = 'system'
+
+
+def theme_mode() -> str:
+    return _theme_mode
+
+
+def set_theme_mode(mode: str) -> None:
+    global _theme_mode  # noqa: PLW0603
+    _theme_mode = mode if mode in ('light', 'dark', 'system') else 'system'
+
+
+def is_effective_dark() -> bool:
+    """True when the app should render dark, per the MySpresso theme
+    preference (NOT simply the OS scheme)."""
+    if _theme_mode == 'dark':
+        return True
+    if _theme_mode == 'light':
+        return False
+    app = QApplication.instance()
+    return isinstance(app, QApplication) and is_dark_mode(app)
+
+
 def current_semantic_tokens() -> design_tokens.SemanticTokens:
-    """SemanticTokens resolved for the current system colour scheme.
+    """SemanticTokens resolved for the effective theme.
 
     Widgets that style themselves in code call this instead of
-    hardcoding light hex values, which makes them dark-mode aware.
+    hardcoding hex values, which keeps them on-theme.
     """
-    app = QApplication.instance()
-    dark = isinstance(app, QApplication) and is_dark_mode(app)
-    return design_tokens.semantic(dark)
+    return design_tokens.semantic(is_effective_dark())
 
 
 def apply_myspresso_stylesheet(app: QApplication) -> None:
@@ -181,7 +206,16 @@ def apply_myspresso_stylesheet(app: QApplication) -> None:
         _log.info('MYSPRESSO_STYLE_DISABLED=true — skipping stylesheet')
         return
     load_bundled_fonts()
-    dark = is_dark_mode(app)
+    # Resolve the persisted theme preference (default: follow the OS —
+    # the validated MySpresso design has a light and a dark variant).
+    # QSettings is usable here: the caller applies the stylesheet after
+    # setOrganizationName/setApplicationName.
+    try:
+        from PyQt6.QtCore import QSettings
+        set_theme_mode(str(QSettings().value('MySpressoTheme', 'system')))
+    except Exception: # pylint: disable=broad-except
+        set_theme_mode('system')
+    dark = is_effective_dark()
     qss = load_qss(dark)
     if not qss:
         return
