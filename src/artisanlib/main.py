@@ -635,7 +635,8 @@ try:
     from artisanlib.styles import apply_myspresso_stylesheet
     apply_myspresso_stylesheet(app)
 except Exception as _e:  # pylint: disable=broad-except
-    _log.exception(_e)
+    # NOTE: module-level _log is defined further down — use a local logger
+    logging.getLogger(__name__).exception(_e)
 
 # replace revision string with git hash when running from source
 if not appFrozen() and __revision__ in {'', '0'}:
