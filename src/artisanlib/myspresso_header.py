@@ -129,6 +129,17 @@ class MySpressoHeader(QFrame):
         """(Re-)apply all colour-bearing styles from the semantic tokens."""
         tok = current_semantic_tokens()
         self._nav_divider.setStyleSheet(f'background-color: {tok.border};')
+        self._mode_badge.setStyleSheet(
+            'QLabel#modeBadge {'
+            f' color: {tok.fg_secondary};'
+            f' background-color: {tok.bg_raised};'
+            f' border: 1px solid {tok.border_strong};'
+            ' border-radius: 2px;'
+            ' padding: 3px 12px;'
+            ' font-size: 10px; font-weight: 700;'
+            ' letter-spacing: 0.05em;'
+            '}'
+        )
         # Subtle badge lift: navy-tinted in light mode, plain black in dark
         # (a coloured glow reads wrong on a dark ground).
         shadow_colour = QColor(0, 0, 0, 70) if tok.dark else QColor(15, 30, 61, 28)
