@@ -91,6 +91,17 @@ class MyspressoSettingsDialog(ArtisanDialog):
         form.addRow('', self._auth_check)
         form.addRow('', reset_btn)
 
+        # RoastGuard — anomaly watcher (see myspresso_roastguard.py)
+        self._rg_check = QCheckBox('Surveiller les anomalies de torréfaction')
+        self._rg_check.setChecked(
+            bool(self._settings.value('RoastGuard/enabled', True, type=bool)))
+        self._rg_cloud_check = QCheckBox('Notifier zabawa.plus en cas d\'anomalie')
+        self._rg_cloud_check.setChecked(
+            bool(self._settings.value('RoastGuard/cloudNotify', False, type=bool)))
+        form.addRow(self._make_section_header('04', 'RoastGuard'))
+        form.addRow('', self._rg_check)
+        form.addRow('', self._rg_cloud_check)
+
         note = QLabel('Thème appliqué immédiatement · endpoints : redémarrage requis.')
         note.setProperty('role', 'muted')
 
@@ -169,6 +180,8 @@ class MyspressoSettingsDialog(ArtisanDialog):
         theme = str(self._theme_combo.currentData())
         theme_changed = theme != str(self._settings.value('MySpressoTheme', 'system'))
         self._settings.setValue('MySpressoTheme', theme)
+        self._settings.setValue('RoastGuard/enabled', self._rg_check.isChecked())
+        self._settings.setValue('RoastGuard/cloudNotify', self._rg_cloud_check.isChecked())
         self._settings.sync()
         if theme_changed:
             # applied live — myspressoApplyTheme re-reads the persisted

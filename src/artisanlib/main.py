@@ -4368,6 +4368,14 @@ class ApplicationWindow(QMainWindow):
         except Exception as _e:  # pylint: disable=broad-except
             _log.exception(_e)
             self.myspresso_phases = None  # type: ignore[assignment]
+        try:
+            from artisanlib.myspresso_roastguard import RoastGuard, RoastGuardBanner
+            self.myspresso_roastguard_banner: RoastGuardBanner = RoastGuardBanner(self.main_widget)
+            self.myspresso_roastguard: RoastGuard = RoastGuard(self.main_widget)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+            self.myspresso_roastguard_banner = None  # type: ignore[assignment]
+            self.myspresso_roastguard = None  # type: ignore[assignment]
 
         mainlayout:QVBoxLayout = QVBoxLayout(self.main_widget)
         mainlayout.setContentsMargins(0, 0, 0, 0)
@@ -4375,6 +4383,9 @@ class ApplicationWindow(QMainWindow):
 
         if self.myspresso_header is not None:
             mainlayout.addWidget(self.myspresso_header)
+        # RoastGuard alert strip — hidden until an anomaly fires
+        if self.myspresso_roastguard_banner is not None:
+            mainlayout.addWidget(self.myspresso_roastguard_banner)
         mainlayout.addWidget(self.level1frame)
 
         # MySpresso fork: vertical splitter — hero | graph area | event log.
@@ -4474,6 +4485,11 @@ class ApplicationWindow(QMainWindow):
         try:
             if self.myspresso_phases is not None:
                 self.myspresso_phases.wire(self)
+        except Exception as _e:  # pylint: disable=broad-except
+            _log.exception(_e)
+        try:
+            if self.myspresso_roastguard is not None and self.myspresso_roastguard_banner is not None:
+                self.myspresso_roastguard.wire(self, self.myspresso_roastguard_banner)
         except Exception as _e:  # pylint: disable=broad-except
             _log.exception(_e)
 
@@ -6867,7 +6883,8 @@ class ApplicationWindow(QMainWindow):
         from artisanlib.canvas import myspresso_default_palette  # noqa: PLC0415
         apply_myspresso_stylesheet(self.app)
         for _wname in ('myspresso_header', 'myspresso_hero', 'myspresso_pilot',
-                       'myspresso_eventlog', 'myspresso_stats', 'myspresso_phases'):
+                       'myspresso_eventlog', 'myspresso_stats', 'myspresso_phases',
+                       'myspresso_roastguard_banner'):
             _w = getattr(self, _wname, None)
             if _w is not None and hasattr(_w, 'restyle'):
                 _w.restyle()
