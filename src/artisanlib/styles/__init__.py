@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import os
 import pathlib
+import re
 
 from PyQt6.QtWidgets import QApplication
 
@@ -82,19 +83,44 @@ def is_style_disabled() -> bool:
 
 _ICONS_DIR = pathlib.Path(__file__).parent.parent.parent / 'icons' / 'myspresso'
 
+_TOKEN_RE = re.compile(r'@([A-Z][A-Z0-9_]*)@')
+
+
+def _token_values() -> dict[str, str]:
+    """All string tokens exported by design_tokens, keyed by name."""
+    from artisanlib import design_tokens
+    return {
+        name: value
+        for name in dir(design_tokens)
+        if name.isupper() and isinstance(value := getattr(design_tokens, name), str)
+    }
+
 
 def load_qss() -> str:
     """Return the QSS string. Empty string if the file cannot be read.
 
-    Substitutes the relative ``"../icons/myspresso/X"`` references with the
-    absolute paths so Qt's ``url()`` resolver works regardless of the app's
-    current working directory.
+    The QSS file is a template: ``@TOKEN@`` placeholders are resolved
+    against ``design_tokens`` so the token module stays the single source
+    of truth. Also substitutes the relative ``"../icons/myspresso/X"``
+    references with absolute paths so Qt's ``url()`` resolver works
+    regardless of the app's current working directory.
     """
     try:
         qss = _QSS_PATH.read_text(encoding='utf-8')
     except OSError as exc:
         _log.warning('failed to load %s: %s', _QSS_PATH, exc)
         return ''
+    tokens = _token_values()
+
+    def _resolve(m: 're.Match[str]') -> str:
+        name = m.group(1)
+        try:
+            return tokens[name]
+        except KeyError:
+            _log.error('QSS references unknown design token: @%s@', name)
+            return 'transparent'  # visible-but-safe fallback
+
+    qss = _TOKEN_RE.sub(_resolve, qss)
     # Rewrite "../icons/myspresso/X" → absolute path so url() resolves.
     if _ICONS_DIR.is_dir():
         qss = qss.replace('"../icons/myspresso/', f'"{_ICONS_DIR.as_posix()}/')

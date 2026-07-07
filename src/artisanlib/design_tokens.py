@@ -6,8 +6,10 @@ Tokens produced from the Claude Design (claude.ai/design) handoff
 (role-based, light + dark) -> component (mapping for specific widgets).
 
 Import from this module instead of hardcoding colors. The QSS
-stylesheet `styles/myspresso.qss` mirrors these values; keep them in
-sync if you change one side.
+stylesheet `styles/myspresso.qss` is a TEMPLATE: it references these
+tokens as `@TOKEN_NAME@` placeholders, substituted at load time by
+`styles.load_qss()`. Change a value here and the whole app follows —
+never hardcode a hex in the QSS or in a widget.
 """
 
 from typing import Final
@@ -114,6 +116,11 @@ DARK_FG_LINK: Final[str] = '#A2B0C8'
 
 DARK_BRAND: Final[str] = NAVY_500
 DARK_ACCENT: Final[str] = RED_400
+
+# Feedback states (dark)
+DARK_SUCCESS_FG: Final[str] = '#6FB78D'
+DARK_SUCCESS_BG: Final[str] = '#1F2D24'
+DARK_ERROR_BG: Final[str] = '#2D1E1B'
 
 # ── TYPOGRAPHY ─────────────────────────────────────────────────────────────
 
