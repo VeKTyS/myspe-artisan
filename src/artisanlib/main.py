@@ -6866,6 +6866,10 @@ class ApplicationWindow(QMainWindow):
         _dark_eff = is_effective_dark()
         self.qmc.palette.update(myspresso_default_palette(_dark_eff))
         self.updateCanvasColors()
+        # updateCanvasColors only retints the figure chrome — the axes, grid
+        # and curves take the new palette on redraw (same sequence as the
+        # Config >> Couleurs dialog)
+        self.qmc.redraw(recomputeAllDeltas=False)
         _nb, _nf = myspresso_default_lcdpalettes(_dark_eff)
         self.lcdpaletteB.update(_nb)
         self.lcdpaletteF.update(_nf)

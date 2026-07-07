@@ -175,8 +175,9 @@ class MyspressoSettingsDialog(ArtisanDialog):
             # preference and re-renders QSS, panels, chart and LCDs
             try:
                 self.aw.myspressoApplyTheme()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as e:  # noqa: BLE001
+                import logging
+                logging.getLogger(__name__).exception(e)
         self.accept()
 
     def _reset_defaults(self) -> None:
