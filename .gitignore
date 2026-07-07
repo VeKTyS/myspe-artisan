@@ -8,6 +8,8 @@ src/artisan-win-*-setup.exe
 # Virtual environments
 venv/
 .venv/
+.venv
+venv.nosync/
 env/
 .env/
 
