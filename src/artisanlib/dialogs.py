@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QDialog, QMessageBox, QDialo
             QHBoxLayout, QVBoxLayout, QLabel, QLineEdit, QLayout, QTableWidget, QHeaderView, QPushButton, QSpinBox, QCheckBox)
 from PyQt6.QtGui import QKeySequence, QAction, QIntValidator, QTextCharFormat, QTextCursor, QColor
 
+from artisanlib import design_tokens
 from artisanlib.widgets import MyQComboBox, ClickableQLineEdit
 from artisanlib.util import comma2dot, float2float, float2floatWeightVolume, convertWeight, weight_units
 
@@ -38,7 +39,7 @@ _log: Final[logging.Logger] = logging.getLogger(__name__)
 
 class ArtisanDialog(QDialog):
 
-    __slots__ = ['aw', 'dialogbuttons']
+    __slots__ = ['aw', 'dialogbuttons', '_mys_aired']
 
     def __init__(self, parent:QWidget|None, aw:'ApplicationWindow') -> None:
         super().__init__(parent)
@@ -113,6 +114,46 @@ class ArtisanDialog(QDialog):
                 current_trans = trans
             if txt != current_trans:
                 btn.setText(current_trans)
+
+    @override
+    def showEvent(self, a0: 'QShowEvent|None') -> None:
+        super().showEvent(a0)
+        self._myspresso_air_out()
+
+    def _myspresso_air_out(self) -> None:
+        """Give every Artisan dialog generous root margins/spacing.
+
+        MySpresso fork: dialogs must feel airy, never cramped. Runs once
+        per dialog, on first show (layouts are complete by then). Only
+        touches layouts still at the Qt style defaults, so a dialog that
+        explicitly set custom margins or spacing keeps them.
+        """
+        if getattr(self, '_mys_aired', False):
+            return
+        self._mys_aired = True
+        layout = self.layout()
+        style = self.style()
+        if layout is None or style is None:
+            return
+        try:
+            from PyQt6.QtWidgets import QStyle  # pylint: disable=import-outside-toplevel
+            default_margins = (
+                style.pixelMetric(QStyle.PixelMetric.PM_LayoutLeftMargin),
+                style.pixelMetric(QStyle.PixelMetric.PM_LayoutTopMargin),
+                style.pixelMetric(QStyle.PixelMetric.PM_LayoutRightMargin),
+                style.pixelMetric(QStyle.PixelMetric.PM_LayoutBottomMargin))
+            m = layout.contentsMargins()
+            if (m.left(), m.top(), m.right(), m.bottom()) == default_margins:
+                layout.setContentsMargins(
+                    design_tokens.SPACE_8, design_tokens.SPACE_7,
+                    design_tokens.SPACE_8, design_tokens.SPACE_7)
+            default_spacing = max(
+                style.pixelMetric(QStyle.PixelMetric.PM_LayoutVerticalSpacing),
+                style.pixelMetric(QStyle.PixelMetric.PM_LayoutHorizontalSpacing))
+            if 0 <= layout.spacing() <= default_spacing:
+                layout.setSpacing(design_tokens.SPACE_5)
+        except Exception as e: # pylint: disable=broad-except
+            _log.exception(e)
 
     @pyqtSlot()
     def cancelDialog(self) -> None:  # ESC key

@@ -252,7 +252,7 @@ QGroupBox {
     background-color: transparent;
     border: none;
     border-top: 1px solid @WARM_300@;
-    margin-top: 22px;
+    margin-top: 24px;
     padding-top: 20px;
     font-size: 12px;
     font-weight: 700;
@@ -262,8 +262,8 @@ QGroupBox {
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    padding: 0 4px 0 0;
-    background-color: @LIGHT_BG_RAISED@;
+    padding: 0 8px 0 0;
+    background-color: @WARM_100@;
     color: @NAVY_900@;
     text-transform: uppercase;
     font-size: 12px;
@@ -493,30 +493,17 @@ QTabBar::tab:selected {
 QTabBar::tab:hover:!selected {
     color: @NAVY_700@;
 }
+/* Airy tab content: breathing room between the tab frame and the
+   controls inside — dialogs must never feel cramped. */
 QTabWidget::pane {
     border: 1px solid @WARM_300@;
     top: -1px;
+    padding: 14px 16px;
 }
 
-
-/* === GroupBox ======================================================== */
-QGroupBox {
-    border: 1px solid @WARM_300@;
-    border-radius: 2px;
-    margin-top: 12px;
-    padding-top: 16px;
-    font-weight: 600;
-    color: @NAVY_900@;
-}
-QGroupBox::title {
-    subcontrol-origin: margin;
-    left: 12px;
-    padding: 0 6px;
-    color: @WARM_700@;
-    text-transform: uppercase;
-    font-size: 11px;
-    letter-spacing: 0.5px;
-}
+/* NOTE: QGroupBox is styled once, in the "Dialog sectioning" block above
+   (divider-style title, no box frame). A second boxed QGroupBox rule used
+   to live here and silently won the cascade — do not reintroduce one. */
 
 
 /* === Checkbox / Radio ================================================ */
@@ -728,7 +715,7 @@ QToolTip {
 [theme="dark"] QGroupBox              { border-top-color: @DARK_BORDER@; }
 [theme="dark"] QGroupBox::title       {
     color: @DARK_FG_PRIMARY@;
-    background-color: @DARK_BG_RAISED@;
+    background-color: @DARK_BG@;
 }
 [theme="dark"] QDialog QLabel[role="dialogSubtitle"] { color: @DARK_FG_SECONDARY@; }
 [theme="dark"] QDialog QLabel[role="section"]        {
