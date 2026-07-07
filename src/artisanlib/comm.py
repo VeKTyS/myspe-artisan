@@ -51,11 +51,12 @@ if TYPE_CHECKING:
 
 
 
+from artisanlib.dialogs import ArtisanDialog
 from artisanlib.util import cmd2str, RoRfromCtoFstrict, fromCtoFstrict, fromFtoCstrict, hex2int, str2cmd
 
 from PyQt6.QtCore import Qt, QDateTime, QSemaphore, pyqtSlot
 from PyQt6.QtGui import QIntValidator
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QGridLayout, QHBoxLayout, QVBoxLayout,
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QGridLayout, QHBoxLayout, QVBoxLayout,
                              QLabel, QLineEdit,QPushButton, QWidget)
 from PyQt6 import sip
 
@@ -165,14 +166,18 @@ class YoctoThread(threading.Thread):
 #########################################################################
 
 #inputs temperature
-class nonedevDlg(QDialog):
+class nonedevDlg(ArtisanDialog):
 
     __slots__ = ['etEdit','btEdit','ETbox','okButton','cancelButton'] # save some memory by using slots
 
     def __init__(self, parent:QWidget, aw:'ApplicationWindow') -> None:
-        super().__init__(parent)
+        super().__init__(parent, aw)
 
-        self.aw = aw
+        # etEdit/btEdit are read AFTER exec() returns, so this dialog must
+        # survive its close (ArtisanDialog sets WA_DeleteOnClose = True)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        # the inherited standard button box is not used by this tiny dialog
+        self.dialogbuttons.setVisible(False)
 
         self.setWindowTitle(QApplication.translate('Form Caption','Manual Temperature Logger'))
         if len(self.aw.qmc.timex):
@@ -199,6 +204,9 @@ class nonedevDlg(QDialog):
         self.ETbox.stateChanged.connect(self.changemanuallogETflag)
         self.okButton = QPushButton(QApplication.translate('Button','OK'))
         self.cancelButton = QPushButton(QApplication.translate('Button','Cancel'))
+        # MySpresso roles so the global QSS styles these like every dialog
+        self.okButton.setProperty('role', 'primary')
+        self.cancelButton.setProperty('role', 'secondary')
         self.cancelButton.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.okButton.clicked.connect(self.accept)
         self.cancelButton.clicked.connect(self.reject)

@@ -4526,7 +4526,7 @@ class ApplicationWindow(QMainWindow):
     # MySpresso fork: open cloud settings dialog
     def _openMyspressoSettings(self) -> None:
         from artisanlib.myspresso_settings_dialog import MyspressoSettingsDialog
-        dlg = MyspressoSettingsDialog(self)
+        dlg = MyspressoSettingsDialog(self, self)
         dlg.exec()
 
     def _start_update_check(self) -> None:

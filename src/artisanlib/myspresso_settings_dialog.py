@@ -6,10 +6,11 @@
 # under the 'cloud/' prefix and take effect after the application
 # is restarted.
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QDialog,
     QDialogButtonBox,
     QFormLayout,
     QLabel,
@@ -19,14 +20,18 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from artisanlib.dialogs import ArtisanDialog
 from artisanlib.styles import current_semantic_tokens
 
+if TYPE_CHECKING:
+    from artisanlib.main import ApplicationWindow
 
-class MyspressoSettingsDialog(QDialog):
+
+class MyspressoSettingsDialog(ArtisanDialog):
     """Edit MySpresso cloud configuration (URL endpoints, auth toggle)."""
 
-    def __init__(self, parent: 'QWidget | None' = None) -> None:
-        super().__init__(parent)
+    def __init__(self, parent: 'QWidget | None', aw: 'ApplicationWindow') -> None:
+        super().__init__(parent, aw)
         self.setWindowTitle('MySpresso Cloud Settings')
         self.setModal(True)
 
@@ -77,21 +82,16 @@ class MyspressoSettingsDialog(QDialog):
         note = QLabel('Redémarrage requis après modification.')
         note.setProperty('role', 'muted')
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok
-            | QDialogButtonBox.StandardButton.Cancel
-        )
-        # Tag the OK button as primary so it picks up the navy primary style.
-        ok_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        # Reuse the ArtisanDialog standard button box (roles/shortcuts wired
+        # by the base class) — only the labels are localised here.
+        ok_btn = self.dialogbuttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok_btn is not None:
-            ok_btn.setProperty('role', 'primary')
             ok_btn.setText('Appliquer')
-        cancel_btn = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel_btn = self.dialogbuttons.button(QDialogButtonBox.StandardButton.Cancel)
         if cancel_btn is not None:
-            cancel_btn.setProperty('role', 'secondary')
             cancel_btn.setText('Annuler')
-        buttons.accepted.connect(self._save_and_accept)
-        buttons.rejected.connect(self.reject)
+        self.dialogbuttons.accepted.connect(self._save_and_accept)
+        self.dialogbuttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 18)
@@ -100,7 +100,7 @@ class MyspressoSettingsDialog(QDialog):
         layout.addWidget(subtitle)
         layout.addLayout(form)
         layout.addWidget(note)
-        layout.addWidget(buttons)
+        layout.addWidget(self.dialogbuttons)
 
         self._apply_theme()
 
