@@ -45,8 +45,8 @@ class LargeLCDs(ArtisanDialog):
             super().__init__(parent, aw) # if parent is set to None, largeLCD panels hide behind the main window in full screen mode on Windows!
         # it is assumed that both lists of lcds (lcd1 & lcd2) have the same length
         # the same is assumed for the other lists below:
-        self.lcds1:list[QLCDNumber] = []
-        self.lcds2:list[QLCDNumber] = []
+        self.lcds1:list[MyQLCDNumber] = []
+        self.lcds2:list[MyQLCDNumber] = []
         self.lcds1styles:list[str] = []
         self.lcds2styles:list[str] = []
         self.lcds1labelsUpper:list[MyQLabel] = []
@@ -339,7 +339,7 @@ class LargeMainLCDs(LargeLCDs):
     __slots__ = ['lcd0']
 
     def __init__(self, parent:'QWidget', aw:'ApplicationWindow') -> None:
-        self.lcd0:QLCDNumber|None = None # Timer
+        self.lcd0:MyQLCDNumber|None = None # Timer
         # we add the ET lcd to the lcd1 list and the BT lcds to the lcd2 list (same for styles, labels and frames
         super().__init__(parent, aw)
         settings = QSettings()

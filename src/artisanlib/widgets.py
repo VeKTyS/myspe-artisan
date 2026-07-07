@@ -15,6 +15,7 @@
 # AUTHOR
 # Marko Luther, 2023
 
+import re
 from contextlib import contextmanager
 from collections.abc import Generator
 from typing import override, Any, TYPE_CHECKING
@@ -26,12 +27,12 @@ if TYPE_CHECKING:
     from PyQt6.QtGui import QWheelEvent, QMouseEvent, QFocusEvent, QResizeEvent, QKeyEvent # pylint: disable=unused-import
     from PyQt6.QtWidgets import QWidget, QTimeEdit, QCheckBox, QComboBox # pylint: disable=unused-import
 
-from PyQt6.QtCore import (Qt, pyqtSignal, pyqtSlot, QLine, QEvent,
+from PyQt6.QtCore import (Qt, pyqtSignal, pyqtSlot, QLine, QEvent, QSize,
     QByteArray, QPropertyAnimation, QEasingCurve, QLocale)
 from PyQt6.QtCore import pyqtProperty # type:ignore[attr-defined]
 from PyQt6.QtWidgets import (QApplication, QSplitter, QSplitterHandle, QLabel, QComboBox, QLineEdit, QTextEdit, QDoubleSpinBox, QPushButton,
-    QTableWidget, QTableWidgetItem, QSizePolicy, QLCDNumber, QGroupBox, QFrame, QSlider, QStyle, QStyleOptionSlider)
-from PyQt6.QtGui import QPen, QPainter, QFontMetrics, QColor, QCursor, QEnterEvent, QPaintEvent
+    QTableWidget, QTableWidgetItem, QSizePolicy, QGroupBox, QFrame, QSlider, QStyle, QStyleOptionSlider)
+from PyQt6.QtGui import QPen, QPainter, QFont, QFontMetrics, QColor, QCursor, QEnterEvent, QPaintEvent
 
 
 @contextmanager
@@ -301,11 +302,124 @@ class ClickableQGroupBox(QGroupBox):
             elif event.button() == Qt.MouseButton.RightButton:
                 self.right_clicked.emit()
 
-class MyQLCDNumber(QLCDNumber):
+class MyQLCDNumber(QLabel):
+    """MySpresso ValueTile — drop-in replacement for QLCDNumber.
+
+    Renders values as JetBrains Mono tabular figures in a flat
+    quasi-square tile instead of the legacy 7-segment look, so all
+    readouts share the hero/pilot typography and render identically on
+    macOS and Windows at any DPI.
+
+    Keeps the QLCDNumber API surface used across Artisan — display(),
+    setDigitCount()/setNumDigits(), setSegmentStyle(),
+    setSmallDecimalPoint(), value() — and rewrites legacy
+    ``QLCDNumber { ... }`` stylesheets on the fly, so every existing
+    call site (including the user-configurable LCD colours from
+    Config ≫ Colors) keeps working unchanged.
+    """
     clicked = pyqtSignal()
     left_clicked = pyqtSignal()
     right_clicked = pyqtSignal()
     double_clicked = pyqtSignal()
+
+    # Appended after any caller stylesheet so the tile geometry (radius,
+    # padding) stays on-design even when legacy styles set other values.
+    _BASE_STYLE = 'MyQLCDNumber { border-radius: 2px; padding: 0px 4px; }'
+    _LEGACY_SELECTOR = re.compile(r'\bQLCDNumber\b')
+
+    def __init__(self, parent:'QWidget|None' = None) -> None:
+        super().__init__(parent)
+        self._lcd_value: float = 0.0
+        self._digit_count: int = 5
+        self.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        font = QFont('JetBrains Mono')
+        font.setStyleHint(QFont.StyleHint.Monospace)
+        font.setWeight(QFont.Weight.DemiBold)
+        self.setFont(font)
+        super().setStyleSheet(self._BASE_STYLE)
+
+    # ── QLCDNumber API compatibility ─────────────────────────────────────
+
+    def display(self, value:'float|int|str') -> None:
+        if isinstance(value, str):
+            text = value
+            try:
+                self._lcd_value = float(value.replace(',', '.'))
+            except ValueError:
+                self._lcd_value = 0.0
+        elif isinstance(value, int):
+            self._lcd_value = float(value)
+            text = str(value)
+        else:
+            self._lcd_value = float(value)
+            text = f'{value:g}'
+        self.setText(text)
+        self._fit_font()
+
+    def value(self) -> float:
+        return self._lcd_value
+
+    def intValue(self) -> int:
+        return int(self._lcd_value)
+
+    def setDigitCount(self, num_digits:int) -> None:
+        self._digit_count = max(1, int(num_digits))
+        self._fit_font()
+
+    # legacy Qt4 alias still used across main.py
+    def setNumDigits(self, num_digits:int) -> None:
+        self.setDigitCount(num_digits)
+
+    def digitCount(self) -> int:
+        return self._digit_count
+
+    def setSegmentStyle(self, _style:Any) -> None: # noqa: ANN401
+        pass # 7-segment rendering is gone; kept for call-site compatibility
+
+    def setSmallDecimalPoint(self, _small:bool) -> None:
+        pass # kept for call-site compatibility
+
+    @override
+    def setStyleSheet(self, styleSheet:'str|None') -> None:
+        # rewrite legacy "QLCDNumber { color:..; background-color:.. }"
+        # selectors to match this class; append the base tile geometry so
+        # it wins over legacy border-radius values
+        rewritten = self._LEGACY_SELECTOR.sub('MyQLCDNumber', styleSheet or '')
+        super().setStyleSheet(f'{rewritten} {self._BASE_STYLE}')
+
+    # ── rendering ────────────────────────────────────────────────────────
+
+    def _fit_font(self) -> None:
+        """Scale the type to the tile, like QLCDNumber scaled its digits.
+
+        Bounded by the tile height and by the width budget for the
+        current text / digit count (JetBrains Mono advance ≈ 0.6 em).
+        """
+        rect = self.contentsRect()
+        if rect.height() <= 8 or rect.width() <= 8:
+            return
+        chars = max(len(self.text()), self._digit_count, 1)
+        px_by_height = rect.height() * 0.62
+        px_by_width = (rect.width() - 8) / (chars * 0.62)
+        px = max(9, min(int(px_by_height), int(px_by_width)))
+        font = self.font()
+        if font.pixelSize() != px:
+            font.setPixelSize(px)
+            self.setFont(font)
+
+    @override
+    def resizeEvent(self, a0:'QResizeEvent|None') -> None:
+        super().resizeEvent(a0)
+        self._fit_font()
+
+    @override
+    def minimumSizeHint(self) -> QSize:
+        # QLCDNumber scaled its digits to any size and never blocked
+        # shrinking; keep splitters/layouts as freely resizable as before
+        # instead of imposing QLabel's text-based minimum.
+        return QSize(10, 10)
+
+    # ── click signals (unchanged behaviour) ──────────────────────────────
 
     @override
     def mousePressEvent(self, a0:'QMouseEvent|None') -> None:
@@ -319,7 +433,7 @@ class MyQLCDNumber(QLCDNumber):
 
     @override
     def mouseDoubleClickEvent(self, a0:'QMouseEvent|None') -> None:
-        super().mousePressEvent(a0)
+        super().mouseDoubleClickEvent(a0)
         if a0 is not None:
             self.double_clicked.emit()
 

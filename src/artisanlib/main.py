@@ -22,6 +22,7 @@ import time as libtime
 startup_time = libtime.process_time()
 
 from artisanlib import __version__, __revision__, __build__, __signature__, __release_sponsor_name__
+from artisanlib import design_tokens
 
 
 import os
@@ -3855,7 +3856,7 @@ class ApplicationWindow(QMainWindow):
         # TP
         self.TPlabel: QLabel = QLabel()
         self.TPlabel.setText('<small><b>' + QApplication.translate('Label', 'TP') + '&raquo;</b></small>')
-        self.TPlcd = QLCDNumber()
+        self.TPlcd = MyQLCDNumber()
         self.TPlcd.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.TPlcd.customContextMenuRequested.connect(self.PhaseslcdClicked)
         self.TPlcd.display('--:--')
@@ -3873,7 +3874,7 @@ class ApplicationWindow(QMainWindow):
         # DRY
         self.DRYlabel: QLabel = QLabel()
         self.DRYlabel.setText('<small><b>&raquo;' + QApplication.translate('Label', 'DRY') + '</b></small>')
-        self.DRYlcd = QLCDNumber()
+        self.DRYlcd = MyQLCDNumber()
         self.DRYlcd.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.DRYlcd.customContextMenuRequested.connect(self.PhaseslcdClicked)
         self.DRYlcd.display('--:--')
@@ -3891,7 +3892,7 @@ class ApplicationWindow(QMainWindow):
         # FCs
         self.FCslabel: QLabel = QLabel()
         self.FCslabel.setText('<small><b>&raquo;' + QApplication.translate('Label', 'FCs') + '</b></small>')
-        self.FCslcd = QLCDNumber()
+        self.FCslcd = MyQLCDNumber()
         self.FCslcd.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.FCslcd.customContextMenuRequested.connect(self.PhaseslcdClicked)
         self.FCslcd.display('--:--')
@@ -3900,7 +3901,7 @@ class ApplicationWindow(QMainWindow):
         # AUC LCD
         self.AUClabel: QLabel = QLabel()
         self.AUClabel.setText('<small><b>' + QApplication.translate('Label', 'AUC') + '</b></small>')
-        self.AUClcd: QLCDNumber = QLCDNumber()
+        self.AUClcd: MyQLCDNumber = MyQLCDNumber()
         self.AUClcd.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.AUClcd.customContextMenuRequested.connect(self.AUClcdClicked)
         self.AUClcd.display('--')
@@ -3908,7 +3909,7 @@ class ApplicationWindow(QMainWindow):
 #        self.AUClcdFrame.setFrameStyle(QFrame.Shadow.Plain)
         self.AUClcd.setNumDigits(3)
         self.AUClcd.setMinimumWidth(65)
-        self.AUClcdFrame.setStyleSheet('QLCDNumber{border-radius:4; border-width: 0; border-color: black; border-style:solid; color: black; background-color: #e6e6e6;}')
+        self.AUClcdFrame.setStyleSheet(f'MyQLCDNumber{{ color: {design_tokens.NAVY_900}; background-color: {design_tokens.WARM_200}; }}')
 
         AUCLayout = QHBoxLayout()
         AUCLayout.addSpacing(20)
@@ -8273,7 +8274,7 @@ class ApplicationWindow(QMainWindow):
         return s
 
     @staticmethod
-    def makePhasesLCDbox(label:QLabel, lcd:QLCDNumber) -> QFrame:
+    def makePhasesLCDbox(label:QLabel, lcd:MyQLCDNumber) -> QFrame:
         label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         lcd.setMinimumHeight(30)
         lcd.setMinimumWidth(80)  # NOTE: with minimumWidth 84 the lcds not always fit in on Mac, 80 works! Better to keep at default.
@@ -8289,7 +8290,7 @@ class ApplicationWindow(QMainWindow):
         LCDVbox.addSpacing(5)
         LCDVbox.setSpacing(0)
         LCDVbox.setContentsMargins(0, 0, 0, 0)
-        frame.setStyleSheet('QLCDNumber{border-radius:4; border-width: 0; border-color: black; border-style:solid; color: black; background-color: #e6e6e6;}')
+        frame.setStyleSheet(f'MyQLCDNumber{{ color: {design_tokens.NAVY_900}; background-color: {design_tokens.WARM_200}; }}')
 #        frame.setFrameShadow(QFrame.Shadow.Sunken)
 #        frame.setLineWidth(1)
 #        frame.setFrameShape(QFrame.Shape.Panel)
