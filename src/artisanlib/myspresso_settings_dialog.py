@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialogButtonBox,
     QFormLayout,
     QLabel,
@@ -69,17 +70,28 @@ class MyspressoSettingsDialog(ArtisanDialog):
         reset_btn.setProperty('role', 'secondary')
         reset_btn.clicked.connect(self._reset_defaults)
 
+        # Theme preference: system | light | dark — applied LIVE on save.
+        self._theme_combo = QComboBox()
+        self._theme_combo.addItem('Système (suivre macOS / Windows)', 'system')
+        self._theme_combo.addItem('Clair', 'light')
+        self._theme_combo.addItem('Sombre', 'dark')
+        _current_mode = str(self._settings.value('MySpressoTheme', 'system'))
+        _idx = self._theme_combo.findData(_current_mode)
+        self._theme_combo.setCurrentIndex(_idx if _idx >= 0 else 0)
+
         # Form rows — each with a small uppercase formLabel above the input.
         form = QFormLayout()
         form.setSpacing(10)
-        form.addRow(self._make_section_header('01', 'Endpoint'))
+        form.addRow(self._make_section_header('01', 'Apparence'))
+        form.addRow(self._make_form_label('Thème'), self._theme_combo)
+        form.addRow(self._make_section_header('02', 'Endpoint'))
         form.addRow(self._make_form_label('URL API'), self._api_edit)
         form.addRow(self._make_form_label('URL Web'), self._web_edit)
-        form.addRow(self._make_section_header('02', 'Authentification'))
+        form.addRow(self._make_section_header('03', 'Authentification'))
         form.addRow('', self._auth_check)
         form.addRow('', reset_btn)
 
-        note = QLabel('Redémarrage requis après modification.')
+        note = QLabel('Thème appliqué immédiatement · endpoints : redémarrage requis.')
         note.setProperty('role', 'muted')
 
         # Reuse the ArtisanDialog standard button box (roles/shortcuts wired
@@ -154,7 +166,17 @@ class MyspressoSettingsDialog(ArtisanDialog):
         self._settings.setValue('cloud/api_base_url', self._api_edit.text().strip())
         self._settings.setValue('cloud/web_base_url', self._web_edit.text().strip())
         self._settings.setValue('cloud/auth_enabled', self._auth_check.isChecked())
+        theme = str(self._theme_combo.currentData())
+        theme_changed = theme != str(self._settings.value('MySpressoTheme', 'system'))
+        self._settings.setValue('MySpressoTheme', theme)
         self._settings.sync()
+        if theme_changed:
+            # applied live — myspressoApplyTheme re-reads the persisted
+            # preference and re-renders QSS, panels, chart and LCDs
+            try:
+                self.aw.myspressoApplyTheme()
+            except Exception:  # noqa: BLE001
+                pass
         self.accept()
 
     def _reset_defaults(self) -> None:

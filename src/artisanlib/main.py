@@ -313,27 +313,13 @@ class Artisan(QtSingleApplication):
             aw:ApplicationWindow|None = self.activationWindow()
             if aw is not None and self.darkmode != bool(colorScheme == Qt.ColorScheme.Dark):
                 self.darkmode = bool(colorScheme == Qt.ColorScheme.Dark)
-                # MySpresso: follow the OS scheme live — re-resolve the QSS
-                # theme property, restyle the code-styled fork widgets, and
-                # (only if the user never customised it) swap the chart palette
+                # MySpresso: follow the OS scheme live (only when the theme
+                # preference is 'system' — a pinned light/dark theme ignores
+                # OS flips)
                 try:
-                    from artisanlib.styles import apply_myspresso_stylesheet, is_effective_dark, theme_mode  # noqa: PLC0415
+                    from artisanlib.styles import theme_mode  # noqa: PLC0415
                     if theme_mode() == 'system':
-                        apply_myspresso_stylesheet(self)
-                        for _wname in ('myspresso_header', 'myspresso_hero',
-                                       'myspresso_pilot', 'myspresso_eventlog',
-                                       'myspresso_stats', 'myspresso_phases'):
-                            _w = getattr(aw, _wname, None)
-                            if _w is not None and hasattr(_w, 'restyle'):
-                                _w.restyle()
-                        from artisanlib.canvas import myspresso_default_palette  # noqa: PLC0415
-                        _dark_eff = is_effective_dark()
-                        aw.qmc.palette.update(myspresso_default_palette(_dark_eff))
-                        aw.updateCanvasColors()
-                        _nb, _nf = myspresso_default_lcdpalettes(_dark_eff)
-                        aw.lcdpaletteB.update(_nb)
-                        aw.lcdpaletteF.update(_nf)
-                        aw.myspressoApplyMainLCDStyles()
+                        aw.myspressoApplyTheme()
                 except Exception as e: # pylint: disable=broad-except
                     _log.exception(e)
                 QTimer.singleShot(500, aw.updateScheduleSignal.emit) # only redraw scheduler window # to adjust the colors of its items (QWidgets are updated automatically)
@@ -6863,6 +6849,27 @@ class ApplicationWindow(QMainWindow):
         if self.checkColors([('base',base,'white','#ffffff')], False) > self.checkColors([('base',base,'black','#000000')],False):
             return '#ffffff'
         return '#000000'
+
+    def myspressoApplyTheme(self) -> None:
+        """Re-render the whole UI for the current effective theme: QSS,
+        MySpresso panels, chart palette and LCD styles. Called on OS scheme
+        flips (preference 'system') and when the user changes the theme in
+        the MySpresso settings dialog."""
+        from artisanlib.styles import apply_myspresso_stylesheet, is_effective_dark  # noqa: PLC0415
+        from artisanlib.canvas import myspresso_default_palette  # noqa: PLC0415
+        apply_myspresso_stylesheet(self.app)
+        for _wname in ('myspresso_header', 'myspresso_hero', 'myspresso_pilot',
+                       'myspresso_eventlog', 'myspresso_stats', 'myspresso_phases'):
+            _w = getattr(self, _wname, None)
+            if _w is not None and hasattr(_w, 'restyle'):
+                _w.restyle()
+        _dark_eff = is_effective_dark()
+        self.qmc.palette.update(myspresso_default_palette(_dark_eff))
+        self.updateCanvasColors()
+        _nb, _nf = myspresso_default_lcdpalettes(_dark_eff)
+        self.lcdpaletteB.update(_nb)
+        self.lcdpaletteF.update(_nf)
+        self.myspressoApplyMainLCDStyles()
 
     def myspressoApplyMainLCDStyles(self) -> None:
         """(Re-)apply the main/extra/phase LCD styles from the current
