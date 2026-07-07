@@ -700,9 +700,11 @@ if QtWebEngineSupport:
 else:
     _log.info('QtWebEngine not found => PDF report rendering disabled')
 
+# MySpresso: force the Fusion style on ALL platforms so the QSS renders on a
+# single base engine and the app looks identical on macOS, Windows and Linux
+# (the menu bar stays native: global bar on macOS, in-window on Windows).
+app.setStyle('Fusion')
 if platform.system().startswith('Windows'):
-    # on Windows we use the Fusion style per default which supports the dark mode
-    app.setStyle('Fusion')
     app.setWindowIcon(QIcon(os.path.join(getAppPath(),'zabawa-roast.png')))
 
 from artisanlib.s7port import s7port
@@ -1587,10 +1589,8 @@ class ApplicationWindow(QMainWindow):
 
         self.percent_decimals:int = 1 # number of decimals to render percentage values like weight loss (set to 0, 1 or 2)
 
-        self.appearance:str = ''
-        # on Windows we use the Fusion style per default which supports the dark mode
-        if platform.system().startswith('Windows'):
-            self.appearance = 'fusion'
+        # MySpresso: Fusion on all platforms for an identical Mac/Windows render
+        self.appearance:str = 'fusion'
 
         # matplotlib font properties:
         self.mpl_fontproperties = FontProperties()
@@ -19993,8 +19993,9 @@ class ApplicationWindow(QMainWindow):
             # set window appearances (style)
             if settings is not None and settings.contains('appearance'):
                 try:
-                    # on Windows/Linux we use the Fusion style per default which supports the dark mode
-                    if not sys.platform.startswith('darwin') and settings.value('appearance') == '':
+                    # MySpresso: Fusion is the default on every platform (incl. macOS)
+                    # so the QSS renders identically everywhere
+                    if settings.value('appearance') == '':
                         settings.setValue('appearance', 'fusion')
                     available = list(map(str, list(QStyleFactory.keys())))
                     i = [x.lower() for x in available].index(toString(settings.value('appearance')))
