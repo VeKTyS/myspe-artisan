@@ -1670,6 +1670,10 @@ class tgraphcanvas(QObject):
         self.roasttzoffset:int = libtime.timezone # timezone offset to be added to roastepoch to get time in local timezone; NOTE: this is not set/updated on loading a .alog profile!
         # profile UUID
         self.roastUUID:str|None = None
+        # MySpresso: True between a sent /asession/start (CHARGE) and its
+        # matching /aroast 'done' end signal — guards send_session_end so the
+        # "torréfaction en cours" banner is cleared exactly once per roast.
+        self.myspresso_session_active:bool = False
         self.scheduleID:str|None = None
         self.scheduleDate:str|None = None # not stored on server and thus might be None while scheduleID is not None (in case scheduleID got set on server side)
 
@@ -4354,6 +4358,9 @@ class tgraphcanvas(QObject):
                         addRoast()
                     except Exception: # pylint: disable=broad-except
                         pass
+                # tell zabawa.plus the roast is over (skips the minimal signal
+                # when addRoast above already uploads the full 'done' record)
+                self.myspresso_end_session()
                 if not self.flagstart:
                     self.aw.autoAdjustAxis(deltas=False)
 
@@ -8048,6 +8055,7 @@ class tgraphcanvas(QObject):
             self.resetTimer()
 
             self.roastUUID = None # reset UUID
+            self.myspresso_session_active = False # MySpresso: no open zabawa.plus session after a reset
             self.roastbatchnr = 0 # initialized to 0, set to increased batchcounter on DROP
             self.roastbatchpos = 1 # initialized to 1, set to increased batchsequence on DROP
             self.roastbatchprefix = self.batchprefix
@@ -14513,6 +14521,28 @@ class tgraphcanvas(QObject):
             _, _, exc_tb = sys.exc_info()
             self.adderror((QApplication.translate('Error Message', 'Exception:') + ' OnRecorder() {0}').format(str(ex)),getattr(exc_tb, 'tb_lineno', '?'))
 
+    # MySpresso: clear the "torréfaction en cours" banner on zabawa.plus.
+    # Fires the /aroast 'done' end signal exactly once per roast (guarded by
+    # myspresso_session_active), on OFF and on DROP. When the full roast record
+    # is already uploaded via addRoast() (plus account connected + DROP set),
+    # that upload flips status to 'done' itself, so we skip the minimal signal
+    # to avoid a second, partial /aroast write for the same id.
+    def myspresso_end_session(self) -> None:
+        if not self.myspresso_session_active or not self.roastUUID:
+            return
+        self.myspresso_session_active = False  # fire once, even if the send fails
+        full_upload_handles_it = (
+            self.aw.plus_account is not None
+            and self.timeindex[6] != 0
+            and self.autoDROPenabled)
+        if full_upload_handles_it:
+            return
+        try:
+            from plus.myspresso_session import send_session_end
+            send_session_end(self.roastUUID)
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+
     def OffRecorder(self, autosave:bool = True, enableButton:bool = True) -> None:
         _log.info('MODE: STOP RECORDING')
         try:
@@ -14529,6 +14559,8 @@ class tgraphcanvas(QObject):
             self.aw.enableSaveActions()
             self.aw.resetCurveVisibilities()
             self.flagstart = False
+            # tell zabawa.plus the roast is over (mirrors /asession/start at CHARGE)
+            self.myspresso_end_session()
             if self.aw.simulator:
                 self.aw.buttonSTARTSTOP.setStyleSheet(self.aw.pushbuttonstyles_simulator['STOP'])
             else:
@@ -14809,6 +14841,7 @@ class tgraphcanvas(QObject):
                     except Exception:  # pylint: disable=broad-except
                         pass
                     send_session_start(self.roastUUID or '', _machine, _coffee, _batch_kg)
+                    self.myspresso_session_active = True
                 except Exception as e:  # pylint: disable=broad-except
                     _log.exception(e)
             self.aw.onMarkMoveToNext(self.aw.buttonCHARGE)
