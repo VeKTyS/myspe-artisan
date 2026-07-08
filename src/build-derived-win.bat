@@ -67,11 +67,20 @@ if ERRORLEVEL 1 (echo ** Failed in pylupdate6pro.py & exit /b 1) else (echo ** S
 
 echo ************* lrelease **************
 cd translations
-set LRELEASE_PATH=..\..\QtLinguist\
-%LRELEASE_PATH%\lrelease.exe -version
+:: Resolve lrelease.exe. The legacy ..\..\QtLinguist path is an AppVeyor-era
+:: layout that does not exist on the GitHub runner. Prefer the qt6-applications
+:: wheel (same source the macOS/Linux build uses), then the aqt Qt install
+:: (%QT_PATH%\bin), then the legacy path.
+set "LRELEASE_EXE="
+for /f "usebackq delims=" %%q in (`python -c "import os,qt6_applications;p=os.path.join(os.path.dirname(qt6_applications.__file__),'Qt','bin','lrelease.exe');print(p if os.path.exists(p) else '')" 2^>nul`) do set "LRELEASE_EXE=%%q"
+if not defined LRELEASE_EXE if exist "%QT_PATH%\bin\lrelease.exe" set "LRELEASE_EXE=%QT_PATH%\bin\lrelease.exe"
+if not defined LRELEASE_EXE if exist "..\..\QtLinguist\lrelease.exe" set "LRELEASE_EXE=..\..\QtLinguist\lrelease.exe"
+if not defined LRELEASE_EXE (echo ** Failed: lrelease.exe not found & exit /b 1)
+echo *** using lrelease: %LRELEASE_EXE%
+"%LRELEASE_EXE%" -version
 for /r %%a IN (*.ts) DO (
-    %LRELEASE_PATH%\lrelease.exe %%~a
-    if ERRORLEVEL 1 (echo ** Failed in %LRELEASE_PATH%\lrelease.exe %%~a & exit /b 1)
+    "%LRELEASE_EXE%" %%~a
+    if ERRORLEVEL 1 (echo ** Failed in "%LRELEASE_EXE%" %%~a & exit /b 1)
 )
 echo ** Success
 cd ..
