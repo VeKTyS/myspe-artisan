@@ -107,15 +107,18 @@ jobs:
       - name: Set Qt path
         run: echo "QT_PATH=C:\Qt\6.5.3\msvc2019_64" >> $env:GITHUB_ENV
 
-      # Portable NSIS from the official zip — much faster than `choco install`
-      # and self-contained (MUI, System/nsExec plugins, x64/WinVer headers).
-      - name: Install NSIS (portable)
+      # NSIS via Chocolatey (preinstalled on the runner). The former portable
+      # zip was pulled from downloads.sourceforge.net, which serves an HTML
+      # interstitial instead of the archive → Expand-Archive failed with
+      # "End of Central Directory record could not be found" (broke v4.1.2 &
+      # v4.2.0). Choco ships the full NSIS 3.x (MUI2, System/nsExec, WinVer/x64
+      # headers) and is reliable.
+      - name: Install NSIS
         shell: powershell
         run: |
-          $url = 'https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10.zip'
-          Invoke-WebRequest -Uri $url -OutFile nsis.zip
-          Expand-Archive -Path nsis.zip -DestinationPath C:\nsis-portable -Force
-          "C:\nsis-portable\nsis-3.10" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          choco install nsis --no-progress -y
+          # expose makensis.exe on PATH for the "Build NSIS installer" step
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Download vc_redist.x64.exe
         shell: powershell
