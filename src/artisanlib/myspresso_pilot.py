@@ -31,7 +31,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -65,9 +64,6 @@ class MySpressoPilotColumn(QFrame):
         self.setMinimumWidth(170)
 
         # Registries of colour-bearing sub-widgets, restyled by _apply_theme().
-        # _big_values maps each big readout label to the SemanticTokens
-        # attribute providing its colour (temp = chart_et red, others navy).
-        self._big_values: list[tuple[QLabel, str]] = []
         self._kickers: list[QLabel] = []
         self._dividers: list[QFrame] = []
         self._ctx_values: list[QLabel] = []
@@ -77,45 +73,19 @@ class MySpressoPilotColumn(QFrame):
         root.setSpacing(0)
 
         # ── Styled readouts (mockup pilot column) ───────────────────────────
-        #   BT · GRAIN   196.8 °C   (big, chart-navy)
-        #   ET · AIR     212.4 °C   (big, chart-red)
-        #   ─────────────────────
-        #   ΔBT   12.6°/min   DEV   10.9 %   AUC   412
-        #   ─────────────────────
-        #   AIR 70 %   TAMBOUR 62 %   BRÛLEUR 38 %   (first 3 event sliders)
+        #   ΔBT   12.6°/min
+        #
+        # Only the rate of rise lives here. The BT/ET big readouts, DEV, AUC
+        # and the event slider rows used to sit above: they duplicated the
+        # native LCD tiles hosted right below (TG / ΔTG / Env In) while being
+        # clipped by this column's width, so they cost vertical space to show
+        # a truncated value. Removed rather than commented out -- git history
+        # is the archive if they are ever wanted back.
         self._kv_values: list[QLabel] = []
         styled = QVBoxLayout()
         styled.setContentsMargins(0, 0, 0, 0)
         styled.setSpacing(0)
-        self._bt_value = self._big_value('—.-', 'chart_bt', 32)
-        styled.addLayout(self._readout('BT · GRAIN', self._bt_value))
-        styled.addSpacing(12)
-        self._et_value = self._big_value('—.-', 'chart_et', 32)
-        styled.addLayout(self._readout('ET · AIR', self._et_value))
-        styled.addSpacing(14)
-        styled.addWidget(self._divider())
-        styled.addSpacing(12)
         self._ror_value = self._kv_row(styled, 'ΔBT')
-        self._dev_value = self._kv_row(styled, 'DEV')
-        self._auc_value = self._kv_row(styled, 'AUC')
-        styled.addSpacing(12)
-        styled.addWidget(self._divider())
-        styled.addSpacing(12)
-        # First three event sliders (AIR / TAMBOUR / BRÛLEUR on MySpresso
-        # machines — labels follow the configured event types).
-        self._slider_rows: list[tuple[QLabel, QLabel]] = []
-        for _ in range(3):
-            box = QHBoxLayout()
-            box.setContentsMargins(0, 2, 0, 2)
-            lab = self._kicker('—')
-            val = QLabel('—')
-            val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self._kv_values.append(val)
-            box.addWidget(lab)
-            box.addStretch()
-            box.addWidget(val)
-            styled.addLayout(box)
-            self._slider_rows.append((lab, val))
         self._styled_block = QWidget()
         self._styled_block.setLayout(styled)
         root.addWidget(self._styled_block)
@@ -171,29 +141,10 @@ class MySpressoPilotColumn(QFrame):
         self._apply_theme()
 
     # ── widget builders (structure only — colours applied by _apply_theme) ──
-    def _big_value(self, text: str, token_attr: str, px: int) -> QLabel:
-        """Big readout label; ``token_attr`` names the SemanticTokens colour."""
-        lbl = QLabel(text)
-        f = QFont('JetBrains Mono')
-        f.setStyleHint(QFont.StyleHint.Monospace)
-        f.setPixelSize(px)
-        f.setWeight(QFont.Weight.DemiBold)
-        lbl.setFont(f)
-        lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        self._big_values.append((lbl, token_attr))
-        return lbl
-
     def _kicker(self, text: str) -> QLabel:
         lbl = QLabel(text)
         self._kickers.append(lbl)
         return lbl
-
-    def _readout(self, label: str, value: QLabel) -> QVBoxLayout:
-        box = QVBoxLayout()
-        box.setSpacing(2)
-        box.addWidget(self._kicker(label))
-        box.addWidget(value)
-        return box
 
     def _divider(self) -> QFrame:
         line = QFrame()
@@ -235,8 +186,6 @@ class MySpressoPilotColumn(QFrame):
             f'#MysPilot {{ border-left: 1px solid {tok.border};'
             f' background-color: {tok.bg}; }}'
         )
-        for lbl, token_attr in self._big_values:
-            lbl.setStyleSheet(f'color: {getattr(tok, token_attr)};')
         for lbl in self._kickers:
             lbl.setStyleSheet(
                 'font-size: 10px; font-weight: 600; letter-spacing: 0.5px;'
@@ -270,10 +219,10 @@ class MySpressoPilotColumn(QFrame):
         self._refresh.start()
 
     def set_native_lcds(self, lcd_frame: QWidget) -> None:
-        """Re-parent the native Artisan LCD tile panel below the styled
-        readouts. Its visibility keeps following Artisan's Readings toggle
-        (showLCDs/hideLCDs → set_native_mode); the styled BT/ET block always
-        stays visible (it is the mockup's canonical display)."""
+        """Re-parent the native Artisan LCD tile panel below the ΔBT row. Its
+        visibility keeps following Artisan's Readings toggle (showLCDs/hideLCDs
+        → set_native_mode). These tiles are now the column's only temperature
+        display, and the freed vertical space goes to them."""
         from PyQt6.QtWidgets import QSizePolicy
         lcd_frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self._native_slot.addWidget(lcd_frame)
@@ -281,8 +230,8 @@ class MySpressoPilotColumn(QFrame):
         self.set_native_mode(lcd_frame.isVisible())
 
     def set_native_mode(self, native_on: bool) -> None:
-        """Mirror Artisan's Readings toggle onto the hosted LCD panel; the
-        styled readouts remain visible in both states."""
+        """Mirror Artisan's Readings toggle onto the hosted LCD panel; the ΔBT
+        row remains visible in both states."""
         native_frame = getattr(self, '_native_frame', None)
         if native_frame is not None:
             native_frame.setVisible(native_on)
@@ -291,12 +240,16 @@ class MySpressoPilotColumn(QFrame):
         self._native_gap.setVisible(native_on)
 
     def update_cursor(self, raw_message: str) -> None:
-        """Display the matplotlib cursor temperature / RoR in the column.
+        """Display the matplotlib cursor RoR in the column.
 
         Forwarded from main.py's set_message wrapper. The upstream format is
         ``<PRE>{mode}  {xs}\\n{channel} {ys}°{mode}</PRE>``; when the cursor
         leaves the axes it collapses to just ``<PRE>F</PRE>`` (mode only) — we
         then fall back to live recording state.
+
+        Only RoR samples are shown: the temperature under the cursor no longer
+        has a home here since the BT/ET readouts were removed in favour of the
+        native LCD tiles.
         """
         import re
         txt = re.sub(r'<[^>]+>', '', raw_message or '').strip()
@@ -318,8 +271,6 @@ class MySpressoPilotColumn(QFrame):
             if '/min' in tail:
                 # RoR sample under cursor
                 self._ror_value.setText(f'{val}°{tail}')
-            else:
-                self._bt_value.setText(f'{val} °{tail}')
         self._cursor_active = True
 
     def _refresh_values(self) -> None:
@@ -334,49 +285,14 @@ class MySpressoPilotColumn(QFrame):
                 self._cursor_active = False
                 cursor_active = False
         qmc = aw.qmc
-        mode = _safe(lambda: qmc.mode, 'F')
 
-        # BT / ET / RoR — skipped while the chart cursor owns them
+        # RoR — skipped while the chart cursor owns it
         if not cursor_active:
-            temp2 = _safe(lambda: qmc.temp2, [])
-            if temp2 and temp2[-1] is not None and temp2[-1] != -1:
-                self._bt_value.setText(f'{temp2[-1]:.1f} °{mode}')
-            else:
-                self._bt_value.setText(f'—.- °{mode}')
-
-            temp1 = _safe(lambda: qmc.temp1, [])
-            if temp1 and temp1[-1] is not None and temp1[-1] != -1:
-                self._et_value.setText(f'{temp1[-1]:.1f} °{mode}')
-            else:
-                self._et_value.setText(f'—.- °{mode}')
-
             delta2 = _safe(lambda: qmc.delta2, [])
             if delta2 and delta2[-1] is not None:
                 self._ror_value.setText(f'{delta2[-1]:+.1f}°/min')
             else:
                 self._ror_value.setText('—')
-
-        # DEV — development time ratio: (t - t_FCs) / (t - t_CHARGE)
-        self._dev_value.setText(self._dev_ratio_text(qmc))
-
-        # AUC — mirror the native AUC readout (already computed by Artisan)
-        auc = _safe(aw.AUClcd.text, '')
-        self._auc_value.setText(auc if auc and auc not in ('--', '0') else '—')
-
-        # Event sliders 1-3 (AIR / TAMBOUR / BRÛLEUR on MySpresso machines)
-        try:
-            etypes = _safe(lambda: qmc.etypes, [])
-            sliders = (aw.slider1, aw.slider2, aw.slider3)
-            for i, (lab, val) in enumerate(self._slider_rows):
-                name = str(etypes[i]) if i < len(etypes) else ''
-                if name and not name.startswith('-'):
-                    lab.setText(name.upper())
-                    val.setText(f'{sliders[i].value()} %')
-                else:
-                    lab.setText('—')
-                    val.setText('—')
-        except Exception:  # noqa: BLE001
-            pass
 
         # Context footer
         store = _safe(lambda: qmc.plus_store_label or qmc.plus_store or '', '') or '—'
@@ -390,32 +306,3 @@ class MySpressoPilotColumn(QFrame):
         else:
             self._meta_charge.setText('—')
 
-    @staticmethod
-    def _dev_ratio_text(qmc) -> str:  # noqa: ANN001
-        """Development time ratio as a percentage string, or '—' before FCs."""
-        try:
-            timex = qmc.timex or []
-            timeindex = qmc.timeindex or []
-            if len(timeindex) < 7:
-                return '—'
-            i_charge = timeindex[0]
-            i_fcs = timeindex[2]
-            i_drop = timeindex[6]
-            if i_fcs <= 0 or i_charge < 0 or i_fcs >= len(timex):
-                return '—'
-            t_charge = timex[i_charge] if 0 <= i_charge < len(timex) else timex[0]
-            t_fcs = timex[i_fcs]
-            # Current reference time: DROP if marked, else last sample.
-            if i_drop > 0 and i_drop < len(timex):
-                t_now = timex[i_drop]
-            elif timex:
-                t_now = timex[-1]
-            else:
-                return '—'
-            total = t_now - t_charge
-            if total <= 0:
-                return '—'
-            dtr = (t_now - t_fcs) / total * 100.0
-            return f'{dtr:.1f} %'
-        except Exception:  # noqa: BLE001
-            return '—'
