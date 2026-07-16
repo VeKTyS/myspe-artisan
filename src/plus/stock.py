@@ -666,9 +666,16 @@ def resolveLegacyStoreId(storeId:str|None, stores:list[Store]|None = None) -> st
         return storeId
     if stores is None:
         stores = getStores()
+    # rsplit: the entity slug is the LAST segment. Location codes are 'L####'
+    # today, but labels are free text and already embed '@', so taking the
+    # last separator rather than the first costs nothing and is the correct
+    # reading of the format. Note the guard above cannot detect a legacy code
+    # that itself contains '@': it would be mistaken for a composite id and
+    # passed through. That is inherent to sniffing the separator and harmless
+    # while codes stay 'L####'.
     candidates = [
         getStoreId(s) for s in stores
-        if getStoreId(s).split(STORE_ENTITY_SEPARATOR, 1)[0] == storeId
+        if getStoreId(s).rsplit(STORE_ENTITY_SEPARATOR, 1)[0] == storeId
     ]
     if len(candidates) == 1:
         _log.debug('resolveLegacyStoreId(%s) -> %s', storeId, candidates[0])

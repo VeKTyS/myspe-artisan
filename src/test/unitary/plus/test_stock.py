@@ -1090,6 +1090,20 @@ class TestStoreOperations:
         ]
         assert stock.resolveLegacyStoreId('L1002', stores) is None
 
+    def test_resolve_legacy_store_id_swapped_codes_are_dropped(self) -> None:
+        """Same code, different physical warehouse per company -> must be dropped.
+
+        A location code is NOT guaranteed to denote the same place across
+        companies: the very same code can point at unrelated warehouses. So
+        resolving a legacy bare code to the server's Myspresso fallback would
+        land on the wrong company AND the wrong warehouse.
+        """
+        stores = [
+            ('Warehouse A — Esperanza', 'L1003@esperanza', 'Esperanza', 'esperanza'),
+            ('Warehouse B — Myspresso', 'L1003@myspresso', 'Myspresso', 'myspresso'),
+        ]
+        assert stock.resolveLegacyStoreId('L1003', stores) is None
+
     def test_resolve_legacy_store_id_passthrough(self) -> None:
         """Composite ids and None are returned untouched; unknown codes are dropped."""
         stores = [('VLG', 'L1002@myspresso', 'Myspresso', 'myspresso')]
