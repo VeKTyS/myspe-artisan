@@ -78,6 +78,12 @@ class StockItem(TypedDict):
     location_hr_id: str
     location_label: str
     amount: float
+    # Entity (company) owning the location. Additive fields introduced with the
+    # composite hr_id rollout: a location code is unique only per entity, so the
+    # same physical code exists under several owners. NotRequired as older cached
+    # stock payloads (plus.config.stock_cache) predate them.
+    entity_hr_id: NotRequired[str]
+    entity_label: NotRequired[str]
 
 class Coffee(TypedDict, total=False):
     hr_id:str
@@ -527,32 +533,61 @@ def getSchedule(acquire_lock:bool=True) -> list[ScheduledItem]:
 
 # ==================
 # Stores
-#   store:  <storeLabel,locationID>
+#   store:  <storeLabel,locationID,entityLabel,entityID>
+
+# A store as rendered in the popups. The first two positions are stable and
+# predate the entity rollout; entity_label/entity_hr_id are appended so that
+# existing index-based accessors keep working.
+Store = tuple[str, str, str, str]
+
+# Separator between the location code and the owning entity slug inside a
+# composite location hr_id (e.g. 'L1002@esperanza'). hr_ids are opaque
+# everywhere else in this client and must never be parsed; the ONLY sanctioned
+# use of this constant is migrating legacy pre-entity ids (see
+# resolveLegacyStoreId).
+STORE_ENTITY_SEPARATOR:Final[str] = '@'
 
 
-def getStoreLabel(store:tuple[str, str]) -> str:
+def getStoreLabel(store:Store) -> str:
     return store[0]
 
 
-def getStoreId(store:tuple[str, str]) -> str:
+def getStoreId(store:Store) -> str:
     return store[1]
+
+
+def getStoreEntityLabel(store:Store) -> str:
+    return store[2]
+
+
+def getStoreEntityId(store:Store) -> str:
+    return store[3]
 
 
 # returns the list of stores defined in stock
 @functools.cache
-def getStores(acquire_lock:bool=True) -> list[tuple[str, str]]:
+def getStores(acquire_lock:bool=True) -> list[Store]:
     _log.debug('getStores()')
     try:
         if acquire_lock:
             stock_semaphore.acquire(1)
         if stock is not None and 'coffees' in stock:
-            res:dict[str, str] = {}
+            # keyed by location hr_id: a location label is NOT unique across
+            # entities (the same physical code is shared by several owners), so
+            # keying by label would silently drop one entity's store
+            res:dict[str, Store] = {}
             for c in stock['coffees']:
                 if 'stock' in c:
                     for s in c['stock']:
                         if s['amount'] > stock_epsilon:
-                            res[s['location_label']] = s['location_hr_id']
-            return sorted(res.items(), key=getStoreLabel)
+                            location_hr_id = s['location_hr_id']
+                            res[location_hr_id] = (
+                                s['location_label'],
+                                location_hr_id,
+                                s.get('entity_label', ''),
+                                s.get('entity_hr_id', ''),
+                            )
+            return sorted(res.values(), key=lambda s: (getStoreEntityLabel(s), getStoreLabel(s)))
     finally:
         if acquire_lock and stock_semaphore.available() < 1:
             stock_semaphore.release(1)
@@ -560,12 +595,12 @@ def getStores(acquire_lock:bool=True) -> list[tuple[str, str]]:
 
 
 # given a list of stores, returns a list of labels to populate the stores popup
-def getStoreLabels(stores:list[tuple[str, str]]) -> list[str]:
+def getStoreLabels(stores:list[Store]) -> list[str]:
     return [getStoreLabel(s) for s in stores]
 
 
 # returns the position of store id in stores or None if store not in the stores
-def getStorePosition(storeId:str, stores:list[tuple[str, str]]) -> int|None:
+def getStorePosition(storeId:str, stores:list[Store]) -> int|None:
     try:
         return [
             getStoreId(s) for s in stores
@@ -573,8 +608,74 @@ def getStorePosition(storeId:str, stores:list[tuple[str, str]]) -> int|None:
     except Exception:  # pylint: disable=broad-except
         return None
 
-def getStoreItem(storeId:str, stores:list[tuple[str, str]]) -> tuple[str, str]|None:
+def getStoreItem(storeId:str, stores:list[Store]) -> Store|None:
     return next((x for x in stores if getStoreId(x) == storeId), None)
+
+
+# ==================
+# Entities (companies owning stores)
+#   entity:  <entityLabel,entityID>
+
+
+def getEntityLabel(entity:tuple[str, str]) -> str:
+    return entity[0]
+
+
+def getEntityId(entity:tuple[str, str]) -> str:
+    return entity[1]
+
+
+# returns the list of distinct entities owning the given stores, sorted by label
+def getEntities(stores:list[Store]) -> list[tuple[str, str]]:
+    res:dict[str, str] = {}
+    for s in stores:
+        entity_hr_id = getStoreEntityId(s)
+        if entity_hr_id:
+            res[getStoreEntityLabel(s)] = entity_hr_id
+    return sorted(res.items(), key=getEntityLabel)
+
+
+# returns the sublist of stores owned by entityId; all stores if entityId is None
+def getStoresOfEntity(stores:list[Store], entityId:str|None) -> list[Store]:
+    if entityId is None:
+        return list(stores)
+    return [s for s in stores if getStoreEntityId(s) == entityId]
+
+
+# returns the entity id owning the store storeId, or None if unknown
+def getEntityOfStore(storeId:str, stores:list[Store]) -> str|None:
+    store_item = getStoreItem(storeId, stores)
+    if store_item is None:
+        return None
+    return getStoreEntityId(store_item) or None
+
+
+# Migrates a store hr_id persisted before the entity rollout (a bare location
+# code like 'L1002', with no entity part) to its current composite form.
+#
+# A bare code is ambiguous by construction: the same code exists under several
+# entities, and the server resolves it to Myspresso as a deterministic fallback.
+# Adopting that fallback client-side would silently move an Esperanza roast onto
+# Myspresso stock, so we only migrate when the code is owned by exactly ONE
+# entity in the current stock. Ambiguous or unknown codes return None and the
+# operator re-picks the store.
+#
+# Composite ids are returned unchanged; None passes through.
+def resolveLegacyStoreId(storeId:str|None, stores:list[Store]|None = None) -> str|None:
+    if storeId is None or STORE_ENTITY_SEPARATOR in storeId:
+        return storeId
+    if stores is None:
+        stores = getStores()
+    candidates = [
+        getStoreId(s) for s in stores
+        if getStoreId(s).split(STORE_ENTITY_SEPARATOR, 1)[0] == storeId
+    ]
+    if len(candidates) == 1:
+        _log.debug('resolveLegacyStoreId(%s) -> %s', storeId, candidates[0])
+        return candidates[0]
+    _log.info('resolveLegacyStoreId(%s): %s candidates, dropping the stale store',
+        storeId, len(candidates))
+    return None
 
 
 

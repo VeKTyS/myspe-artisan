@@ -981,8 +981,10 @@ class TestStoreOperations:
             mock_stock_semaphore.acquire.assert_called_once_with(1)
             mock_stock_semaphore.release.assert_called_once_with(1)
             assert len(result) == 2
-            assert ('Main Store', 'store1') in result
-            assert ('Secondary Store', 'store2') in result
+            # entity_label/entity_hr_id default to '' when the payload predates
+            # the entity rollout (older cached stock)
+            assert ('Main Store', 'store1', '', '') in result
+            assert ('Secondary Store', 'store2', '', '') in result
 
     def test_get_stores_empty_stock(self, mock_stock_semaphore:Mock) -> None:
         """Test getStores with empty stock."""
@@ -1012,6 +1014,88 @@ class TestStoreOperations:
 
             # Assert
             assert len(result) == 2
+
+    def test_get_stores_keeps_same_code_of_distinct_entities(self) -> None:
+        """Two entities sharing a location code must both survive.
+
+        getStores() keys by location hr_id: keying by label would collapse the
+        two 'VLG' stores into one and silently hide an entity's stock.
+        """
+        shared_code_stock = {
+            'coffees': [
+                {
+                    'hr_id': 'C1',
+                    'label': 'Coffee',
+                    'stock': [
+                        {'location_hr_id': 'L1002@myspresso', 'location_label': 'VLG',
+                         'amount': 10.0, 'entity_hr_id': 'myspresso', 'entity_label': 'Myspresso'},
+                        {'location_hr_id': 'L1002@esperanza', 'location_label': 'VLG',
+                         'amount': 5.0, 'entity_hr_id': 'esperanza', 'entity_label': 'Esperanza'},
+                    ],
+                }
+            ]
+        }
+        # getStores is @functools.cache: drop whatever a previous test cached.
+        # patch.object (not patch('plus.stock.stock')) so we act on the already
+        # imported module object instead of re-resolving it by name, which the
+        # module-import state of a full-folder run cannot satisfy.
+        stock.getStores.cache_clear()
+        with patch.object(stock, 'stock', shared_code_stock):
+            # acquire_lock=False: the semaphore is not what we are exercising here
+            result = stock.getStores(acquire_lock=False)
+        stock.getStores.cache_clear()
+
+        assert len(result) == 2
+        assert ('VLG', 'L1002@esperanza', 'Esperanza', 'esperanza') in result
+        assert ('VLG', 'L1002@myspresso', 'Myspresso', 'myspresso') in result
+        # sorted by entity label first
+        assert stock.getStoreEntityLabel(result[0]) == 'Esperanza'
+
+    def test_get_entities_and_filtering(self) -> None:
+        """getEntities dedupes owners; getStoresOfEntity restricts to one owner."""
+        stores = [
+            ('VLG', 'L1002@esperanza', 'Esperanza', 'esperanza'),
+            ('Nord', 'L1003@esperanza', 'Esperanza', 'esperanza'),
+            ('VLG', 'L1002@myspresso', 'Myspresso', 'myspresso'),
+        ]
+
+        entities = stock.getEntities(stores)
+        assert entities == [('Esperanza', 'esperanza'), ('Myspresso', 'myspresso')]
+
+        esperanza_stores = stock.getStoresOfEntity(stores, 'esperanza')
+        assert [stock.getStoreId(s) for s in esperanza_stores] == ['L1002@esperanza', 'L1003@esperanza']
+        # None means "no filter": every store is offered
+        assert len(stock.getStoresOfEntity(stores, None)) == 3
+        assert stock.getEntityOfStore('L1002@myspresso', stores) == 'myspresso'
+        assert stock.getEntityOfStore('unknown', stores) is None
+
+    def test_resolve_legacy_store_id_unambiguous(self) -> None:
+        """A bare code owned by exactly one entity is migrated to its composite id."""
+        stores = [
+            ('Nord', 'L1003@esperanza', 'Esperanza', 'esperanza'),
+            ('VLG', 'L1002@myspresso', 'Myspresso', 'myspresso'),
+        ]
+        assert stock.resolveLegacyStoreId('L1003', stores) == 'L1003@esperanza'
+
+    def test_resolve_legacy_store_id_ambiguous_is_dropped(self) -> None:
+        """A bare code owned by several entities must NOT silently pick one.
+
+        This is the regression guard for the wrong-stock decrement: adopting the
+        server's Myspresso fallback here would move an Esperanza roast onto
+        Myspresso stock.
+        """
+        stores = [
+            ('VLG', 'L1002@esperanza', 'Esperanza', 'esperanza'),
+            ('VLG', 'L1002@myspresso', 'Myspresso', 'myspresso'),
+        ]
+        assert stock.resolveLegacyStoreId('L1002', stores) is None
+
+    def test_resolve_legacy_store_id_passthrough(self) -> None:
+        """Composite ids and None are returned untouched; unknown codes are dropped."""
+        stores = [('VLG', 'L1002@myspresso', 'Myspresso', 'myspresso')]
+        assert stock.resolveLegacyStoreId('L1002@esperanza', stores) == 'L1002@esperanza'
+        assert stock.resolveLegacyStoreId(None, stores) is None
+        assert stock.resolveLegacyStoreId('L9999', stores) is None
 
     def test_get_store_label(self) -> None:
         """Test getStoreLabel function."""

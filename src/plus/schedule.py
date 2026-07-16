@@ -3000,7 +3000,7 @@ class ScheduleWindow(ArtisanResizeablDialog): # pyright:ignore[reportGeneralType
         self.aw.qmc.plus_blend_spec_labels = None
         self.aw.qmc.beans = ''
         # set store/coffee/blend
-        store_item:tuple[str, str]|None = plus.stock.getStoreItem(item.store, plus.stock.getStores())
+        store_item:plus.stock.Store|None = plus.stock.getStoreItem(item.store, plus.stock.getStores())
         if store_item is not None:
             self.aw.qmc.plus_store = item.store
             self.aw.qmc.plus_store_label = plus.stock.getStoreLabel(store_item)

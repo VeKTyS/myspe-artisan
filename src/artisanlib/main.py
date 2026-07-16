@@ -16489,8 +16489,14 @@ class ApplicationWindow(QMainWindow):
 
 #PLUS
             if 'plus_store' in profile:
-                self.qmc.plus_store = decodeLocalStrict(profile['plus_store'])
-                if 'plus_store_label' in profile:
+                # Profiles saved before the entity rollout hold a bare location code
+                # ('L1002'), which is ambiguous across companies and would otherwise
+                # be uploaded as-is and silently resolved to Myspresso by the server.
+                # Migrate it when the code belongs to a single company, drop it
+                # otherwise (plus.stock.resolveLegacyStoreId).
+                self.qmc.plus_store = plus.stock.resolveLegacyStoreId(
+                    decodeLocalStrict(profile['plus_store']))
+                if 'plus_store_label' in profile and self.qmc.plus_store is not None:
                     self.qmc.plus_store_label = decodeLocalStrict(profile['plus_store_label'])
                 else:
                     self.qmc.plus_store_label = None
@@ -19692,7 +19698,10 @@ class ApplicationWindow(QMainWindow):
 #                self.qmc.beansize = toFloat(settings.value('beansize',self.qmc.beansize)) # retired
             self.qmc.beansize_min = toInt(settings.value('beansize_min',self.qmc.beansize_min))
             self.qmc.beansize_max = toInt(settings.value('beansize_max',self.qmc.beansize_max))
-            self.qmc.plus_default_store = settings.value('plus_default_store',self.qmc.plus_default_store)
+            # a remembered default store predating the entity rollout is a bare
+            # location code and ambiguous across companies: migrate or drop it
+            self.qmc.plus_default_store = plus.stock.resolveLegacyStoreId(
+                settings.value('plus_default_store',self.qmc.plus_default_store))
             if filename is None and settings.contains('plus_custom_blend_name'):
                 # we don't import plus custom blend data from external settings file as the custom blend is considered temporary
                 plus_custom_blend_name = toString(settings.value('plus_custom_blend_name',''))

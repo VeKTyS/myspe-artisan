@@ -1493,14 +1493,20 @@ class editGraphDlg(ArtisanResizeablDialog):
         if self.aw.plus_account is not None:
             plus.stock.init() # we try to init the stock from the cache before populating the popups
             # variables populated by stock data as rendered in the corresponding popups
-            self.plus_stores:list[tuple[str, str]]|None = None
+            self.plus_stores:list[plus.stock.Store]|None = None
+            self.plus_entities:list[tuple[str, str]]|None = None
             self.plus_coffees:list[tuple[str, tuple[plus.stock.Coffee, plus.stock.StockItem]]]|None = None
             self.plus_blends:list[plus.stock.BlendStructure]|None = None
-            self.plus_default_store = self.aw.qmc.plus_default_store
+            # hr_ids persisted before the entity rollout are bare location codes and
+            # are ambiguous across entities: migrate them, or drop them if the code
+            # is owned by more than one entity (see plus.stock.resolveLegacyStoreId)
+            self.plus_default_store = plus.stock.resolveLegacyStoreId(self.aw.qmc.plus_default_store)
+            # the entity whose stores are offered in the stores popup; None = all
+            self.plus_entity_selected:str|None = None
             # current selected stock/coffee/blend _id
             if self.aw.qmc.plus_store is not None:
-                self.plus_store_selected = self.aw.qmc.plus_store # holds the store corresponding to the plus_coffee_selected/plus_blend_selected
-                self.plus_store_selected_label = self.aw.qmc.plus_store_label
+                self.plus_store_selected = plus.stock.resolveLegacyStoreId(self.aw.qmc.plus_store) # holds the store corresponding to the plus_coffee_selected/plus_blend_selected
+                self.plus_store_selected_label = (self.aw.qmc.plus_store_label if self.plus_store_selected is not None else None)
             if self.aw.qmc.plus_coffee is not None:
                 self.plus_coffee_selected = self.aw.qmc.plus_coffee
                 self.plus_coffee_selected_label = self.aw.qmc.plus_coffee_label
@@ -1528,14 +1534,19 @@ class editGraphDlg(ArtisanResizeablDialog):
             plusCoffeeslabel.setToolTip(QApplication.translate('Tooltip','Select beans from your inventory'))
             self.plusStoreslabel = QLabel('<b>' + QApplication.translate('Label', 'Store') + '</b>')
             self.plusStoreslabel.setToolTip(QApplication.translate('Tooltip','Select a storage location'))
+            self.plusEntitieslabel = QLabel('<b>' + QApplication.translate('Label', 'Company') + '</b>')
+            self.plusEntitieslabel.setToolTip(QApplication.translate('Tooltip','Select the company owning the stock'))
             self.plusBlendslabel = QLabel('<b>' + QApplication.translate('Label', 'Blend') + '</b>')
             self.plusBlendslabel.setToolTip(QApplication.translate('Tooltip','Select a blend from your inventory'))
             self.plus_stores_combo = MyQComboBox(self)
             self.plus_stores_combo.setToolTip(QApplication.translate('Tooltip','Select a storage location'))
+            self.plus_entities_combo = MyQComboBox(self)
+            self.plus_entities_combo.setToolTip(QApplication.translate('Tooltip','Select the company owning the stock'))
             self.plus_coffees_combo = CoffeesComboBox(self)
             self.plus_coffees_combo.setToolTip(QApplication.translate('Tooltip','Select beans from your inventory'))
             self.plus_blends_combo = BlendsComboBox(self)
             self.plus_blends_combo.setToolTip(QApplication.translate('Tooltip','Select a blend from your inventory'))
+            self.plus_entities_combo.currentIndexChanged.connect(self.entitySelectionChanged)
             self.plus_stores_combo.currentIndexChanged.connect(self.storeSelectionChanged)
             self.plus_coffees_combo.currentIndexChanged.connect(self.coffeeSelectionChanged)
             self.plus_blends_combo.currentIndexChanged.connect(self.blendSelectionChanged)
@@ -1553,6 +1564,10 @@ class editGraphDlg(ArtisanResizeablDialog):
             self.plus_blends_combo.setMinimumContentsLength(10)
             self.plus_stores_combo.setMinimumContentsLength(10)
             self.plus_stores_combo.setMaximumWidth(130)
+            self.plus_entities_combo.setMinimumContentsLength(10)
+            self.plus_entities_combo.setMaximumWidth(130)
+            self.plus_entities_combo.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Maximum)
+            self.plus_entities_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
             self.plus_coffees_combo.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Maximum)
             self.plus_coffees_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
             self.plus_blends_combo.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Maximum)
@@ -2271,6 +2286,7 @@ class editGraphDlg(ArtisanResizeablDialog):
     def plus_popups_set_enabled(self, b:bool) -> None:
         if self.aw.plus_account is not None:
             try:
+                self.plus_entities_combo.setEnabled(b)
                 self.plus_stores_combo.setEnabled(b)
                 self.plus_coffees_combo.setEnabled(b)
                 self.plus_blends_combo.setEnabled(b)
@@ -2288,7 +2304,38 @@ class editGraphDlg(ArtisanResizeablDialog):
                 #---- Stores
 
                 if storeIndex is None or storeIndex == -1:
-                    self.plus_stores = plus.stock.getStores()
+                    all_stores = plus.stock.getStores()
+
+                    #---- Entities
+                    # the entity popup filters the stores popup; it only makes sense
+                    # if the account actually spans several companies
+                    self.plus_entities = plus.stock.getEntities(all_stores)
+                    if self.plus_entity_selected is None and self.plus_default_store is not None:
+                        # follow the entity of the remembered store, so that reopening the
+                        # dialog lands on the same company the store belongs to
+                        self.plus_entity_selected = plus.stock.getEntityOfStore(self.plus_default_store, all_stores)
+                    if self.plus_entity_selected is not None and self.plus_entity_selected not in [
+                            plus.stock.getEntityId(e) for e in self.plus_entities]:
+                        # the remembered entity vanished from the stock
+                        self.plus_entity_selected = None
+                    multiple_entities = len(self.plus_entities) > 1
+                    try:
+                        self.plus_entities_combo.setVisible(multiple_entities)
+                        if hasattr(self, 'plusEntitieslabel'):
+                            self.plusEntitieslabel.setVisible(multiple_entities)
+                    except Exception as e:  # pylint: disable=broad-except
+                        _log.exception(e)
+                    self.plus_entities_combo.blockSignals(True)
+                    self.plus_entities_combo.clear()
+                    self.plus_entities_combo.addItems([''] + [plus.stock.getEntityLabel(e) for e in self.plus_entities])
+                    ep = next((i for i, e in enumerate(self.plus_entities)
+                        if plus.stock.getEntityId(e) == self.plus_entity_selected), None)
+                    self.plus_entities_combo.setCurrentIndex(0 if ep is None else ep+1)
+                    self.plus_entities_combo.blockSignals(False)
+
+                    #---- Stores
+                    # restricted to the selected entity; all stores when no entity is picked
+                    self.plus_stores = plus.stock.getStoresOfEntity(all_stores, self.plus_entity_selected)
                     try:
                         if len(self.plus_stores) == 1:
                             self.plus_default_store = plus.stock.getStoreId(self.plus_stores[0])
@@ -2297,6 +2344,15 @@ class editGraphDlg(ArtisanResizeablDialog):
                             self.plus_stores_combo.setVisible(False)
                         else:
                             self.plus_stores_combo.setVisible(True)
+                        if hasattr(self, 'plusStoreslabel'):
+                            self.plusStoreslabel.setVisible(len(self.plus_stores) > 1)
+                        # the whole right-hand cell disappears when there is nothing to
+                        # choose: a single company owning a single store
+                        cell_useful = multiple_entities or len(self.plus_stores) > 1
+                        if getattr(self, '_mys_store_box_ref', None) is not None:
+                            self._mys_store_box_ref.setVisible(cell_useful)
+                        if getattr(self, '_mys_store_label_ref', None) is not None:
+                            self._mys_store_label_ref.setVisible(cell_useful)
                         # keep legacy frame permanently hidden (reparented in _build_myspresso_tab1)
                         if hasattr(self, 'plusLineStoresFrame'):
                             self.plusLineStoresFrame.hide()
@@ -2580,6 +2636,28 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.markPlusCoffeeFields(False)
         self.density_in_editing_finished()
         self.moistureEdited()
+
+    @pyqtSlot(int)
+    def entitySelectionChanged(self, n:int) -> None:
+        # index 0 is the empty entry: no entity filter, all stores are offered
+        if n == -1 or self.plus_entities is None:
+            return
+        entity_id:str|None = None
+        if 0 < n <= len(self.plus_entities):
+            entity_id = plus.stock.getEntityId(self.plus_entities[n-1])
+        if entity_id == self.plus_entity_selected:
+            return
+        self.plus_entity_selected = entity_id
+        # the remembered store belongs to the previous company: dropping it forces
+        # a fresh pick within the newly selected one, so a roast can never carry a
+        # store from a company the operator is no longer looking at
+        self.plus_default_store = None
+        prev_coffee_label = self.plus_coffee_selected_label
+        prev_blend_label = self.plus_blend_selected_label
+        # full repopulation (storeIndex None) so that stores, coffees and blends
+        # are all recomputed against the new entity
+        self.populatePlusCoffeeBlendCombos(None)
+        self.updateTitle(prev_coffee_label, prev_blend_label)
 
     @pyqtSlot(int)
     def storeSelectionChanged(self, n:int) -> None:
@@ -3026,8 +3104,24 @@ class editGraphDlg(ArtisanResizeablDialog):
                 )
                 sh.addWidget(self.plus_custom_blend_button)
             id_grid.addWidget(stock_box, 2, 1, 1, 2)
-            id_grid.addWidget(_field_label(QApplication.translate('Label', 'Store')), 2, 3)
-            id_grid.addWidget(self.plus_stores_combo, 2, 4)
+            self._mys_store_label_ref = _field_label(QApplication.translate('Label', 'Store'))
+            id_grid.addWidget(self._mys_store_label_ref, 2, 3)
+            # Company + store share the right column: the company popup filters the
+            # store popup, and both collapse to nothing when the account has a
+            # single company / a single store (visibility driven by
+            # populatePlusCoffeeBlendCombos).
+            store_box = QWidget()
+            store_box.setObjectName('MysStoreBox')
+            store_box.setStyleSheet('#MysStoreBox { background: transparent; }')
+            stb = QHBoxLayout(store_box)
+            stb.setContentsMargins(0, 0, 0, 0)
+            stb.setSpacing(6)
+            self.plus_entities_combo.setMaximumWidth(120)
+            self.plus_stores_combo.setMaximumWidth(120)
+            stb.addWidget(self.plus_entities_combo, 1)
+            stb.addWidget(self.plus_stores_combo, 1)
+            self._mys_store_box_ref = store_box
+            id_grid.addWidget(store_box, 2, 4)
 
         # Row: Grains label + dark card wrapping beansedit
         id_grid.addWidget(_field_label(QApplication.translate('Label', 'Beans')), 3, 0,
