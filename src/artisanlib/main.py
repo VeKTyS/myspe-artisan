@@ -4393,6 +4393,11 @@ class ApplicationWindow(QMainWindow):
         self.mys_v_splitter: Splitter = Splitter(Qt.Orientation.Vertical)
         self.mys_v_splitter.setChildrenCollapsible(False)
         self.mys_v_splitter.setContentsMargins(0, 0, 0, 0)
+        # A QSplitterHandle's grab area equals its width. The 10px default is a
+        # thin target with a mouse on a fractionally-scaled Windows display
+        # (macOS' Retina + trackpad hides this); widen the drag handles that
+        # resize the profile bar so they are easy to grab on every platform.
+        self.mys_v_splitter.setHandleWidth(18)
         _mys_v_sizes: list[int] = []
 
         if self.myspresso_hero is not None:
