@@ -4396,9 +4396,11 @@ class ApplicationWindow(QMainWindow):
         _mys_v_sizes: list[int] = []
 
         if self.myspresso_hero is not None:
-            # Minimum 0 so the user can drag the profile bar fully closed to
-            # maximise the chart (collapsible set below). Default size 96.
-            self.myspresso_hero.setMinimumHeight(0)
+            # The profile bar is resizable but never hidable: a hard floor keeps
+            # the title always on screen while letting the user shrink it (its
+            # content scales down with the pane, see MySpressoHeroPanel). Non-
+            # collapsible is set below. Default size 96.
+            self.myspresso_hero.setMinimumHeight(self.myspresso_hero.FLOOR_HEIGHT)
             self.mys_v_splitter.addWidget(self.myspresso_hero)
             _mys_v_sizes.append(96)
 
@@ -4444,7 +4446,7 @@ class ApplicationWindow(QMainWindow):
         # phase-LCDs pane fully closed to maximise the chart, while the chart
         # pane itself stays protected from collapse.
         if self.myspresso_hero is not None:
-            self.mys_v_splitter.setCollapsible(0, True)   # hero / profile bar
+            self.mys_v_splitter.setCollapsible(0, False)  # hero / profile bar — resizable but always visible
             self.mys_v_splitter.setCollapsible(1, True)   # phases pane
             self.mys_v_splitter.setCollapsible(2, False)  # chart
         else:

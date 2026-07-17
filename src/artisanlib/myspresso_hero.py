@@ -41,6 +41,8 @@ from PyQt6.QtWidgets import (
 from artisanlib.styles import current_semantic_tokens
 
 if TYPE_CHECKING:
+    from PyQt6.QtGui import QResizeEvent
+
     from artisanlib.main import ApplicationWindow
 
 
@@ -63,13 +65,25 @@ def _safe(getter, default):  # noqa: ANN001
 class MySpressoHeroPanel(QFrame):
     """Hero strip between the brand header and the chart area."""
 
+    # Resizable but never hidable: main.py floors the pane at FLOOR_HEIGHT and
+    # marks it non-collapsible. Between the floor and FULL_HEIGHT the title and
+    # timer scale down (resizeEvent) so a shrunk bar stays clean instead of
+    # clipping its big glyphs.
+    FLOOR_HEIGHT = 44
+    FULL_HEIGHT = 96
+    _TIMER_PX = (26, 46)   # (at floor, at full)
+    _TITLE_PX = (15, 26)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName('MysHero')
         self.setFrameShape(QFrame.Shape.NoFrame)
         # Not fixed: the hero is the top pane of mys_v_splitter and stays
-        # user-resizable. main.py sets minimumHeight(0) + collapsible so it can
-        # be dragged fully closed to maximise the chart.
+        # user-resizable. main.py floors it at FLOOR_HEIGHT and makes it
+        # non-collapsible, so it can be shrunk but never dragged away.
+        # Current scaled glyph sizes (updated by resizeEvent); start at full.
+        self._timer_px: int = self._TIMER_PX[1]
+        self._title_px: int = self._TITLE_PX[1]
 
         # ── Title block (left) ──────────────────────────────────────────────
         title_block = QVBoxLayout()
@@ -183,13 +197,17 @@ class MySpressoHeroPanel(QFrame):
             f' color: {tok.fg_muted};'
         )
         self._title.setStyleSheet(
-            f'font-size: 26px; font-weight: 700; color: {tok.fg_primary};'
+            f'font-size: {self._title_px}px; font-weight: 700; color: {tok.fg_primary};'
         )
         self._filename.setStyleSheet(
             'font-family: "JetBrains Mono"; font-size: 11px;'
             f' color: {tok.fg_muted};'
         )
         self._timer_label.setStyleSheet(f'color: {tok.fg_primary};')
+        _tf = self._timer_label.font()
+        if _tf.pixelSize() != self._timer_px:
+            _tf.setPixelSize(self._timer_px)
+            self._timer_label.setFont(_tf)
         self._timer_caption.setStyleSheet(
             'font-size: 10px; font-weight: 600; letter-spacing: 1.5px;'
             f' color: {tok.fg_muted};'
@@ -213,6 +231,24 @@ class MySpressoHeroPanel(QFrame):
     def restyle(self) -> None:
         """Public hook: re-apply theme-dependent styles (OS theme flip)."""
         self._apply_theme()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """Scale the title and timer with the pane height.
+
+        The bar is floored and non-collapsible (see main.py), so it can be
+        dragged smaller but never away. Interpolating the two big glyphs
+        between FLOOR_HEIGHT and FULL_HEIGHT keeps a shrunk bar legible instead
+        of clipping them.
+        """
+        super().resizeEvent(event)
+        span = self.FULL_HEIGHT - self.FLOOR_HEIGHT
+        t = 1.0 if span <= 0 else max(0.0, min(1.0, (event.size().height() - self.FLOOR_HEIGHT) / span))
+        timer_px = round(self._TIMER_PX[0] + t * (self._TIMER_PX[1] - self._TIMER_PX[0]))
+        title_px = round(self._TITLE_PX[0] + t * (self._TITLE_PX[1] - self._TITLE_PX[0]))
+        if (timer_px, title_px) != (self._timer_px, self._title_px):
+            self._timer_px = timer_px
+            self._title_px = title_px
+            self._apply_theme()
 
     def wire(self, app_window: ApplicationWindow) -> None:
         """Bind to the application window and start polling."""
