@@ -1365,3 +1365,45 @@ class TestCoffeeLabelGeneration:
             # Assert
             # Should identify duplicates and add to set
             assert len(stock.duplicate_coffee_origin_labels) > 0
+
+
+class TestRenderAmount:
+    """Fractional bag rendering (kg + number of bags).
+
+    render_weight and the unit translations are patched to fixed values so the
+    assertions read the bag logic directly, independent of this module's global
+    Qt mocks (which otherwise stub render_weight to '1.0 kg' and translate every
+    string to 'Ethiopia').
+    """
+
+    def _render(self, amount: float, default_unit: Any = None) -> str:
+        with patch.object(stock, 'render_weight', return_value='KG'), patch.dict(
+            stock.unit_translations_singular, {'bag': 'bag'}, clear=False
+        ), patch.dict(stock.unit_translations_plural, {'bag': 'bags'}, clear=False):
+            return stock.renderAmount(amount, default_unit)
+
+    def test_fractional_below_one_bag(self) -> None:
+        """A stock under one full bag shows a fractional count, not '0'."""
+        assert self._render(30.0, {'name': 'bag', 'size': 69}).endswith('0.4bags')
+
+    def test_exactly_one_bag_is_singular(self) -> None:
+        assert self._render(69.0, {'name': 'bag', 'size': 69}).endswith('1bag')
+
+    def test_whole_count_has_no_decimal(self) -> None:
+        """An exact multiple renders as an integer, no trailing '.0'."""
+        assert self._render(828.0, {'name': 'bag', 'size': 69}).endswith('12bags')
+
+    def test_fractional_above_one_bag(self) -> None:
+        assert self._render(110.0, {'name': 'bag', 'size': 69}).endswith('1.6bags')
+
+    def test_no_default_unit_is_kg_only(self) -> None:
+        """Without a per-unit size, only the kg figure is shown (no bags)."""
+        assert self._render(110.0) == 'KG'
+
+    def test_unknown_unit_name_falls_back_to_kg(self) -> None:
+        """A unit name absent from the translation table degrades to kg only."""
+        assert self._render(500.0, {'name': 'crate', 'size': 1000}) == 'KG'
+
+    def test_zero_unit_size_does_not_divide_by_zero(self) -> None:
+        """A degenerate size of 0 must not crash; it falls back to kg only."""
+        assert self._render(50.0, {'name': 'bag', 'size': 0}) == 'KG'

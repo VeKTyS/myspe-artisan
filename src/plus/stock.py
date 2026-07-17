@@ -489,13 +489,19 @@ def renderAmount(amount:float, default_unit:CoffeeUnit|None=None, target_unit_id
     try:
         if default_unit is not None:
             unit_size = int(default_unit['size'])
-            if amount > unit_size:
-                a = amount // unit_size
-                if a > 1:
-                    u = unit_translations_plural[default_unit['name']]
-                else:
+            if unit_size > 0:
+                # Fractional bag count, shown even below one full bag
+                # (e.g. "0.4bags") -- not just whole floored bags. The kg value
+                # stays first; the count is that same figure divided by the
+                # per-bag weight the server now exposes on every coffee.
+                bags = amount / unit_size
+                bags_str = f'{bags:.1f}'.rstrip('0').rstrip('.')
+                # English pluralisation: singular only for exactly "1".
+                if bags_str == '1':
                     u = unit_translations_singular[default_unit['name']]
-                return f'{kg_str} – {int(round(a))}{u}'
+                else:
+                    u = unit_translations_plural[default_unit['name']]
+                return f'{kg_str} – {bags_str}{u}'
     except Exception:  # pylint: disable=broad-except
         pass
     return kg_str
