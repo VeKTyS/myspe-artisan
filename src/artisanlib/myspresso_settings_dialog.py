@@ -102,6 +102,13 @@ class MyspressoSettingsDialog(ArtisanDialog):
         form.addRow('', self._rg_check)
         form.addRow('', self._rg_cloud_check)
 
+        # Interface — show/hide the phases band to free chart space (applied live)
+        self._phases_check = QCheckBox('Afficher les phases (TP / séchage / Maillard / développement)')
+        self._phases_check.setChecked(
+            bool(self._settings.value('MySpresso/showPhases', True, type=bool)))
+        form.addRow(self._make_section_header('05', 'Interface'))
+        form.addRow('', self._phases_check)
+
         note = QLabel('Thème appliqué immédiatement · endpoints : redémarrage requis.')
         note.setProperty('role', 'muted')
 
@@ -182,7 +189,17 @@ class MyspressoSettingsDialog(ArtisanDialog):
         self._settings.setValue('MySpressoTheme', theme)
         self._settings.setValue('RoastGuard/enabled', self._rg_check.isChecked())
         self._settings.setValue('RoastGuard/cloudNotify', self._rg_cloud_check.isChecked())
+        phases_changed = self._phases_check.isChecked() != bool(
+            self._settings.value('MySpresso/showPhases', True, type=bool))
+        self._settings.setValue('MySpresso/showPhases', self._phases_check.isChecked())
         self._settings.sync()
+        if phases_changed:
+            # applied live — show/hide the phases band and hand space to the chart
+            try:
+                self.aw.myspressoApplyPhasesVisible()
+            except Exception as e:  # noqa: BLE001
+                import logging
+                logging.getLogger(__name__).exception(e)
         if theme_changed:
             # applied live — myspressoApplyTheme re-reads the persisted
             # preference and re-renders QSS, panels, chart and LCDs

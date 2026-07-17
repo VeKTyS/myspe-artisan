@@ -4419,6 +4419,9 @@ class ApplicationWindow(QMainWindow):
         self.mys_v_splitter.addWidget(_phases_pane)
         _phases_pane.setMinimumHeight(0)
         self.phasesLCDs.setMinimumHeight(0)
+        # Kept so the 'Afficher les phases' setting can hide/show the whole band
+        # (frees the vertical space for the chart). See myspressoApplyPhasesVisible.
+        self._mys_phases_pane: QWidget = _phases_pane
         _mys_v_sizes.append(96 if self.myspresso_phases is not None else 76)
 
         self.mys_v_splitter.addWidget(self.mys_h_splitter)
@@ -4455,6 +4458,8 @@ class ApplicationWindow(QMainWindow):
 
         self.mys_v_splitter.setSizes(_mys_v_sizes)
         mainlayout.addWidget(self.mys_v_splitter, 1)
+        # Honour the persisted 'Afficher les phases' preference on startup.
+        self.myspressoApplyPhasesVisible()
 
         # MySpresso fork: wire AFTER both the action buttons exist in
         # level1layout AND the MySpresso widgets have been constructed.
@@ -6901,6 +6906,18 @@ class ApplicationWindow(QMainWindow):
         self.lcdpaletteB.update(_nb)
         self.lcdpaletteF.update(_nf)
         self.myspressoApplyMainLCDStyles()
+
+    def myspressoApplyPhasesVisible(self) -> None:
+        """Show or hide the phases band (TP / SÉCHAGE / MAILLARD /
+        DÉVELOPPEMENT tiles + the legacy native phase LCDs it hosts) per the
+        'MySpresso/showPhases' preference. Hiding it hands the freed vertical
+        space back to the chart. Called at startup and live from the settings
+        dialog."""
+        pane = getattr(self, '_mys_phases_pane', None)
+        if pane is None:
+            return
+        show = bool(QSettings().value('MySpresso/showPhases', True, type=bool))
+        pane.setVisible(show)
 
     def myspressoApplyMainLCDStyles(self) -> None:
         """(Re-)apply the main/extra/phase LCD styles from the current
