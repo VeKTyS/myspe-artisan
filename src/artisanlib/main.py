@@ -4643,7 +4643,7 @@ class ApplicationWindow(QMainWindow):
 
     def _show_update_banner(self, version: str, url: str, name: str, size: int) -> None:
         from artisanlib.updater import UpdateBanner
-        banner = UpdateBanner(version, url, name, size, self.main_widget)
+        banner = UpdateBanner(version, url, name, size, self.main_widget, aw=self)
         layout = self.main_widget.layout()
         if layout is not None:
             insert_pos = 1 if self.myspresso_header is not None else 0

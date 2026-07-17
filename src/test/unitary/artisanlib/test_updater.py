@@ -311,3 +311,116 @@ def test_run_updater_falls_back_when_not_in_app_bundle(tmp_path, monkeypatch):
 
     assert fallback_called == ['/tmp/update.dmg']
     assert not mock_app.quit.called  # fallback path does not quit
+
+
+# ---------------------------------------------------------------------------
+# Numeric version comparison (string compare broke from 4.10 on)
+# ---------------------------------------------------------------------------
+
+def test_version_tuple_two_digit_minor_is_greater():
+    from artisanlib.updater import _version_tuple
+    # The exact regression: '4.10' < '4.9' as strings, but 4.10 > 4.9.
+    assert _version_tuple('4.10.0') > _version_tuple('4.9.0')
+
+
+def test_version_tuple_no_downgrade_from_two_digit_minor():
+    from artisanlib.updater import _version_tuple
+    assert _version_tuple('4.9.1') < _version_tuple('4.10.0')
+
+
+def test_version_tuple_shorter_prefix_is_older():
+    from artisanlib.updater import _version_tuple
+    assert _version_tuple('4.3') < _version_tuple('4.3.2')
+
+
+def test_version_tuple_non_numeric_degrades_to_zero():
+    from artisanlib.updater import _version_tuple
+    assert _version_tuple('4.3.x') == (4, 3, 0)
+
+
+def test_checker_offers_update_from_four_ten(monkeypatch):
+    """A 4.11 release must be offered to a 4.10 client (the string-compare bug
+    would have wrongly stayed silent)."""
+    from artisanlib import updater as _u
+    from artisanlib.updater import UpdateChecker
+
+    mock_resp = _make_response('v4.11.0', [
+        {'name': 'artisan-mac-4.11.0.dmg',
+         'browser_download_url': 'https://example.com/artisan-mac-4.11.0.dmg',
+         'size': 1},
+    ])
+    emitted: list[tuple] = []
+    monkeypatch.setattr(_u, '__version__', '4.10.0', raising=False)
+    with patch('artisanlib.updater.requests') as mock_req, \
+         patch('artisanlib.updater.sys') as mock_sys, \
+         patch('artisanlib.updater.QSettings') as mock_qs:
+        mock_req.get.return_value = mock_resp
+        mock_sys.platform = 'darwin'
+        mock_qs.return_value.value.return_value = ''
+        checker = UpdateChecker()
+        checker.update_available.connect(lambda v, u, n, s: emitted.append((v, u, n, s)))
+        checker.run()
+    assert emitted and emitted[0][0] == '4.11.0'
+
+
+# ---------------------------------------------------------------------------
+# Roast-in-progress guard: the install (which quits the app) must never fire
+# during a roast.
+# ---------------------------------------------------------------------------
+
+from types import SimpleNamespace  # noqa: E402
+
+from PyQt6.QtWidgets import QApplication  # noqa: E402
+
+
+@pytest.fixture(scope='module', autouse=True)
+def _qapp():
+    return QApplication.instance() or QApplication([])
+
+
+def _banner(aw):
+    from artisanlib.updater import UpdateBanner
+    return UpdateBanner('9.9.9', 'http://x/y', 'zabawa-roast-win-x64-9.9.9-setup.exe',
+                        1, None, aw=aw)
+
+
+def _aw(flagstart=False, flagon=False):
+    return SimpleNamespace(qmc=SimpleNamespace(flagstart=flagstart, flagon=flagon))
+
+
+def test_roast_active_when_recording():
+    assert _banner(_aw(flagstart=True))._roast_active() is True
+
+
+def test_roast_active_when_sampling():
+    assert _banner(_aw(flagon=True))._roast_active() is True
+
+
+def test_roast_not_active_when_idle():
+    assert _banner(_aw())._roast_active() is False
+
+
+def test_roast_not_active_without_aw():
+    assert _banner(None)._roast_active() is False
+
+
+def test_install_deferred_while_roasting():
+    banner = _banner(_aw(flagstart=True))
+    banner._pending_install_path = '/tmp/update.dmg'
+    with patch('artisanlib.updater.run_updater_and_quit') as quit_mock, \
+         patch('artisanlib.updater.QTimer.singleShot') as timer_mock:
+        banner._maybe_install_or_wait()
+    quit_mock.assert_not_called()  # the app must survive the roast
+    assert timer_mock.call_args.args[0] == 3000
+    assert timer_mock.call_args.args[1] == banner._maybe_install_or_wait
+
+
+def test_install_runs_when_idle():
+    banner = _banner(_aw())
+    banner._pending_install_path = '/tmp/update.dmg'
+    with patch('artisanlib.updater.run_updater_and_quit') as quit_mock, \
+         patch('artisanlib.updater.QTimer.singleShot') as timer_mock:
+        banner._maybe_install_or_wait()
+        timer_mock.call_args.args[1]()  # invoke the scheduled callback
+    assert timer_mock.call_args.args[0] == 800
+    quit_mock.assert_called_once_with('/tmp/update.dmg')

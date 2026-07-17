@@ -29,6 +29,20 @@ from artisanlib.styles import current_semantic_tokens
 GITHUB_API_URL = 'https://api.github.com/repos/VeKTyS/myspe-artisan/releases/latest'
 
 
+def _version_tuple(v: str) -> tuple[int, ...]:
+    """Parse a dotted version into an int tuple for numeric comparison.
+
+    String comparison is wrong past a two-digit component ('4.10' < '4.9'
+    lexicographically), which would silently stop offering updates from 4.10 on
+    and even offer downgrades. Non-numeric parts degrade to 0.
+    """
+    parts: list[int] = []
+    for p in v.split('.'):
+        m = re.match(r'\d+', p)
+        parts.append(int(m.group(0)) if m else 0)
+    return tuple(parts)
+
+
 class UpdateChecker(QThread):
     update_available = pyqtSignal(str, str, str, int)
     # emits: (version, download_url, asset_name, asset_size)
@@ -53,7 +67,7 @@ class UpdateChecker(QThread):
             return
         latest: str = match.group(0)
 
-        if latest <= __version__ or latest == skipped:
+        if _version_tuple(latest) <= _version_tuple(__version__) or latest == skipped:
             return
 
         platform_key = 'artisan-mac' if sys.platform == 'darwin' else 'zabawa-roast-win'
@@ -106,13 +120,17 @@ class UpdateDownloader(QThread):
 
 class UpdateBanner(QFrame):
     def __init__(self, version: str, asset_url: str, asset_name: str,
-                 asset_size: int = 0, parent=None) -> None:
+                 asset_size: int = 0, parent=None, aw=None) -> None:
         super().__init__(parent)
         self._version = version
         self._asset_url = asset_url
         self._asset_name = asset_name
         self._asset_size = asset_size
         self._downloader: UpdateDownloader | None = None
+        # ApplicationWindow, used to check whether a roast is being recorded so
+        # the app is never quit for the update mid-roast (would lose the roast).
+        self._aw = aw
+        self._pending_install_path: str | None = None
 
         self.setFixedHeight(44)
         self.setObjectName('UpdateBanner')
@@ -186,9 +204,39 @@ class UpdateBanner(QFrame):
         self._downloader.error.connect(self._on_download_error)
         self._downloader.start()
 
+    def _roast_active(self) -> bool:
+        """True while Artisan is sampling or recording a roast.
+
+        Installing quits the app, so it must never happen mid-roast. flagstart
+        is an active recording (the roast that would be lost); flagon is live
+        sampling (machine connected) — both block the install.
+        """
+        qmc = getattr(self._aw, 'qmc', None)
+        if qmc is None:
+            return False
+        return bool(getattr(qmc, 'flagstart', False) or getattr(qmc, 'flagon', False))
+
     def _on_download_finished(self, path: str) -> None:
+        self._pending_install_path = path
+        self._maybe_install_or_wait()
+
+    def _maybe_install_or_wait(self) -> None:
+        """Install now if idle, otherwise poll until the roast finishes.
+
+        The download is already done; we only defer the quit. This makes the
+        update install automatically the moment the roaster is idle instead of
+        interrupting a roast in progress.
+        """
+        if self._pending_install_path is None:
+            return
+        if self._roast_active():
+            self._label.setText('Mise à jour prête — installation après la torréfaction')
+            self._progress.hide()
+            QTimer.singleShot(3000, self._maybe_install_or_wait)
+            return
         self._label.setText('Installation en cours, fermeture…')
         self._progress.hide()
+        path = self._pending_install_path
         QTimer.singleShot(800, lambda: run_updater_and_quit(path))
 
     def _on_download_error(self, msg: str) -> None:
