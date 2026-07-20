@@ -5724,15 +5724,18 @@ class editGraphDlg(ArtisanResizeablDialog):
                         weight_unit_idx = self.unitsComboBox.currentIndex()
                         weight_kg = convertWeight(weight_in, weight_unit_idx, weight_units.index('Kg'))
                         if weight_kg > 0:
-                            nb = math.ceil(weight_kg / size)
+                            # MySpresso fork: round the bag count to the nearest
+                            # half-bag so the figure is always a clean X.0 or X.5
+                            # (was math.ceil, i.e. whole bags rounded up).
+                            nb = math.floor(weight_kg / size * 2 + 0.5) / 2
                             kg_str = f'{float2floatWeightVolume(weight_kg):g} kg'
-                            if nb >= 1:
+                            if nb >= 0.5:
                                 unit_name = du.get('name', 'bag')
                                 if nb == 1:
                                     u = plus.stock.unit_translations_singular.get(unit_name, unit_name)
                                 else:
                                     u = plus.stock.unit_translations_plural.get(unit_name, unit_name)
-                                label = f'{kg_str} – {nb} {u}'
+                                label = f'{kg_str} – {nb:g} {u}'
                             else:
                                 label = kg_str
         except Exception:  # pylint: disable=broad-except

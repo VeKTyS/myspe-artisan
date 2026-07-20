@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import QApplication
 
 import copy
 import json
+import math
 import time
 import datetime
 import html
@@ -490,12 +491,13 @@ def renderAmount(amount:float, default_unit:CoffeeUnit|None=None, target_unit_id
         if default_unit is not None:
             unit_size = int(default_unit['size'])
             if unit_size > 0:
-                # Fractional bag count, shown even below one full bag
-                # (e.g. "0.4bags") -- not just whole floored bags. The kg value
-                # stays first; the count is that same figure divided by the
-                # per-bag weight the server now exposes on every coffee.
-                bags = amount / unit_size
-                bags_str = f'{bags:.1f}'.rstrip('0').rstrip('.')
+                # Bag count = kg / per-bag weight (the server exposes the size
+                # on every coffee), rounded to the nearest half-bag so it reads
+                # as a clean X.0 or X.5. Sub-half-bag stocks fall back to kg.
+                bags = math.floor(amount / unit_size * 2 + 0.5) / 2
+                if bags < 0.5:
+                    return kg_str
+                bags_str = f'{bags:g}'
                 # English pluralisation: singular only for exactly "1".
                 if bags_str == '1':
                     u = unit_translations_singular[default_unit['name']]
