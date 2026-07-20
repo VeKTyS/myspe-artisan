@@ -4325,6 +4325,11 @@ class ApplicationWindow(QMainWindow):
         self.mys_h_splitter: Splitter = Splitter(Qt.Orientation.Horizontal)
         self.mys_h_splitter.setChildrenCollapsible(False)
         self.mys_h_splitter.setContentsMargins(0, 0, 0, 0)
+        # Same rationale as mys_v_splitter below: the 10px default handle is too
+        # thin to grab with a mouse on a fractionally-scaled Windows display
+        # (macOS' Retina + trackpad hides this). Widen the chart/pilot divider
+        # so it is easy to grab on every platform.
+        self.mys_h_splitter.setHandleWidth(18)
         self.mys_h_splitter.addWidget(midleft_widget)
         if self.myspresso_pilot is not None:
             self.myspresso_pilot.set_native_lcds(self.lcdFrame)
