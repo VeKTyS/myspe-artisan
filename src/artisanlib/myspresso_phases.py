@@ -1,18 +1,21 @@
 """
-MySpresso Artisan — phase tile row.
+MySpresso Artisan — phase tile.
 
-Reproduces the validated mockup's phase bar: four quasi-square cards
-between the hero and the chart —
+Surfaces the roast's DÉVELOPPEMENT phase as a single quasi-square card
+between the hero and the chart:
 
-    ┌ TP        ✓ ┐ ┌ SÉCHAGE   ✓ ┐ ┌ MAILLARD  ✓ ┐ ┌ DÉVELOPPEMENT · en cours ┐
-    │ 01:02       │ │ 04:10       │ │ 03:35       │ │ 00:57                    │
-    │ 95.3° BT    │ │ 47.9 %      │ │ 41.2 %      │ │ 10.9 %                   │
-    └─────────────┘ └─────────────┘ └─────────────┘ └━━━━━━ (accent bar) ─────┘
+    ┌ DÉVELOPPEMENT · en cours ┐
+    │ 00:57                    │
+    │ 10.9 %                   │
+    └━━━━━━ (accent bar) ──────┘
 
-Each tile: kicker label + state mark, big JetBrains Mono value, muted
-subtitle, and a 3 px progress bar pinned to the bottom edge. States:
-``done`` (green bar + ✓), ``active`` (accent border + accent bar +
-"en cours"), ``idle`` (dimmed).
+The tile: kicker label + state mark, big JetBrains Mono value (time in
+develop), muted subtitle (DTR %), and a 3 px progress bar pinned to the
+bottom edge. States: ``done`` (green bar + ✓), ``active`` (accent border
++ accent bar + "en cours"), ``idle`` (dimmed).
+
+(TP, SÉCHAGE and MAILLARD tiles were removed from the band by product
+decision — only DÉVELOPPEMENT is rendered.)
 
 Read-only mirror of qmc state, polled every 500 ms like the other
 MySpresso panels — nothing here writes to qmc.
@@ -163,11 +166,11 @@ class MySpressoPhaseTiles(QFrame):
         self.setObjectName('MysPhases')
         self.setFrameShape(QFrame.Shape.NoFrame)
 
-        self._tp = _PhaseTile('TP')
-        self._dry = _PhaseTile('SÉCHAGE')
-        self._mai = _PhaseTile('MAILLARD')
+        # MySpresso fork: only the DÉVELOPPEMENT phase is surfaced (TP, SÉCHAGE
+        # and MAILLARD were dropped from the band by product decision). The
+        # single tile stays centred in the resizable phases pane.
         self._dev = _PhaseTile('DÉVELOPPEMENT')
-        self._tiles = (self._tp, self._dry, self._mai, self._dev)
+        self._tiles = (self._dev,)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(20, 8, 20, 8)
@@ -218,7 +221,7 @@ class MySpressoPhaseTiles(QFrame):
             pass
         return 0.0
 
-    def _refresh_values(self) -> None:  # noqa: PLR0912, PLR0915
+    def _refresh_values(self) -> None:
         aw = self._aw
         if aw is None:
             return
@@ -228,47 +231,13 @@ class MySpressoPhaseTiles(QFrame):
             timeindex = qmc.timeindex
             charge_i = timeindex[0]
             if not timex or charge_i < 0:
-                for t in self._tiles:
-                    t.set_content('--:--', '', 'idle', 0.0)
+                self._dev.set_content('--:--', '', 'idle', 0.0)
                 return
             t0 = timex[charge_i]
             now = self._elapsed()
             drop_t = timex[timeindex[6]] - t0 if timeindex[6] else None
             total = drop_t if drop_t is not None else max(now, 1.0)
-            dry_t = timex[timeindex[1]] - t0 if timeindex[1] else None
             fcs_t = timex[timeindex[2]] - t0 if timeindex[2] else None
-
-            # TP — turning point
-            tp_i = int(getattr(qmc, 'TPalarmtimeindex', 0) or 0)
-            if tp_i > 0 and tp_i < len(timex):
-                tp_t = timex[tp_i] - t0
-                tp_temp = qmc.temp2[tp_i] if tp_i < len(qmc.temp2) else None
-                sub = f'{tp_temp:.1f}° BT' if tp_temp is not None and tp_temp > -1 else ''
-                self._tp.set_content(_fmt_mmss(tp_t), sub, 'done', 1.0)
-            else:
-                self._tp.set_content('--:--', '', 'active' if now > 0 else 'idle',
-                                     0.0)
-
-            # SÉCHAGE — CHARGE → DRY END
-            if dry_t is not None:
-                self._dry.set_content(_fmt_mmss(dry_t), f'{dry_t / total * 100:.1f} %',
-                                      'done', 1.0)
-            else:
-                state = 'active' if tp_i > 0 else 'idle'
-                self._dry.set_content(_fmt_mmss(now), f'{now / total * 100:.0f} %',
-                                      state, now / total)
-
-            # MAILLARD — DRY END → FC START
-            if fcs_t is not None and dry_t is not None:
-                mai = fcs_t - dry_t
-                self._mai.set_content(_fmt_mmss(mai), f'{mai / total * 100:.1f} %',
-                                      'done', 1.0)
-            elif dry_t is not None:
-                mai = now - dry_t
-                self._mai.set_content(_fmt_mmss(mai), f'{mai / total * 100:.0f} %',
-                                      'active', mai / total)
-            else:
-                self._mai.set_content('--:--', '', 'idle', 0.0)
 
             # DÉVELOPPEMENT — FC START → DROP (DTR)
             if fcs_t is not None:
