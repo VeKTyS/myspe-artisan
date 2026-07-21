@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -57,6 +58,8 @@ class _PhaseTile(QFrame):
         self.setObjectName('MysPhaseTile')
         self.setMinimumWidth(120)
         self.setMaximumWidth(230)
+        # Hug the content height instead of stretching to fill the column.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         self.state: str = 'idle'  # 'idle' | 'active' | 'done'
         self.progress: float = 0.0  # 0..1 for the bottom bar
@@ -98,7 +101,6 @@ class _PhaseTile(QFrame):
         content.addLayout(head)
         content.addWidget(self._value)
         content.addWidget(self._sub)
-        content.addStretch()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -165,6 +167,8 @@ class MySpressoPhaseTiles(QFrame):
         super().__init__(parent)
         self.setObjectName('MysPhases')
         self.setFrameShape(QFrame.Shape.NoFrame)
+        # Stay at content height; do not stretch to fill the pilot column.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         # MySpresso fork: only the DÉVELOPPEMENT phase is surfaced (TP, SÉCHAGE
         # and MAILLARD were dropped from the band by product decision). The
