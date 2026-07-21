@@ -4393,6 +4393,22 @@ class ApplicationWindow(QMainWindow):
             mainlayout.addWidget(self.myspresso_roastguard_banner)
         mainlayout.addWidget(self.level1frame)
 
+        # MySpresso fork: the hero (profile title + timer) is a FIXED bar above
+        # the chart — always visible, no longer a resizable/collapsible splitter
+        # pane. Its content renders at full size (FULL_HEIGHT).
+        if self.myspresso_hero is not None:
+            self.myspresso_hero.setFixedHeight(self.myspresso_hero.FULL_HEIGHT)
+            mainlayout.addWidget(self.myspresso_hero)
+
+        # MySpresso fork: the Développement tile moves to the TOP of the pilot
+        # column (far right of the chart), out of the band under the hero. Falls
+        # back to the phases pane when there is no pilot column.
+        _dev_in_pilot = False
+        if self.myspresso_phases is not None and self.myspresso_pilot is not None:
+            self.myspresso_pilot.set_phase_tile(self.myspresso_phases)
+            _dev_in_pilot = True
+        self._dev_in_pilot: bool = _dev_in_pilot
+
         # MySpresso fork: vertical splitter — hero | graph area | event log.
         # All three zones are user-resizable via drag handles.
         self.mys_v_splitter: Splitter = Splitter(Qt.Orientation.Vertical)
@@ -4405,34 +4421,28 @@ class ApplicationWindow(QMainWindow):
         self.mys_v_splitter.setHandleWidth(18)
         _mys_v_sizes: list[int] = []
 
-        if self.myspresso_hero is not None:
-            # The profile bar is resizable but never hidable: a hard floor keeps
-            # the title always on screen while letting the user shrink it (its
-            # content scales down with the pane, see MySpressoHeroPanel). Non-
-            # collapsible is set below. Default size 96.
-            self.myspresso_hero.setMinimumHeight(self.myspresso_hero.FLOOR_HEIGHT)
-            self.mys_v_splitter.addWidget(self.myspresso_hero)
-            _mys_v_sizes.append(96)
-
-        # MySpresso fork: the phases pane below the hero hosts the mockup's
-        # phase TILES (TP / SÉCHAGE / MAILLARD / DÉVELOPPEMENT — always
-        # visible) plus the legacy native phase LCDs (hidden by default,
-        # still toggleable via the Phase LCDs option as before). One
-        # resizable, collapsible splitter pane for both.
+        # MySpresso fork: the phases pane below the chart now hosts ONLY the
+        # legacy native phase LCDs (hidden by default, toggleable via the Phase
+        # LCDs option). The Développement tile moved to the pilot column above,
+        # so this pane starts collapsed. In the no-pilot fallback the tile still
+        # lives here.
         _phases_pane = QWidget()
         _phases_pane_layout = QVBoxLayout(_phases_pane)
         _phases_pane_layout.setContentsMargins(0, 0, 0, 0)
         _phases_pane_layout.setSpacing(0)
-        if self.myspresso_phases is not None:
+        if self.myspresso_phases is not None and not _dev_in_pilot:
             _phases_pane_layout.addWidget(self.myspresso_phases)
         _phases_pane_layout.addWidget(self.phasesLCDs)
         self.mys_v_splitter.addWidget(_phases_pane)
         _phases_pane.setMinimumHeight(0)
         self.phasesLCDs.setMinimumHeight(0)
-        # Kept so the 'Afficher les phases' setting can hide/show the whole band
-        # (frees the vertical space for the chart). See myspressoApplyPhasesVisible.
+        # Kept so the 'Afficher les phases' setting can hide/show the tile.
+        # See myspressoApplyPhasesVisible.
         self._mys_phases_pane: QWidget = _phases_pane
-        _mys_v_sizes.append(96 if self.myspresso_phases is not None else 76)
+        if _dev_in_pilot:
+            _mys_v_sizes.append(0)
+        else:
+            _mys_v_sizes.append(96 if self.myspresso_phases is not None else 76)
 
         self.mys_v_splitter.addWidget(self.mys_h_splitter)
         _mys_v_sizes.append(9999)
@@ -4455,16 +4465,10 @@ class ApplicationWindow(QMainWindow):
             self.mys_v_splitter.addWidget(self.myspresso_stats)
             _mys_v_sizes.append(28)
 
-        # MySpresso fork: let the user drag the hero (profile bar) and the
-        # phase-LCDs pane fully closed to maximise the chart, while the chart
-        # pane itself stays protected from collapse.
-        if self.myspresso_hero is not None:
-            self.mys_v_splitter.setCollapsible(0, False)  # hero / profile bar — resizable but always visible
-            self.mys_v_splitter.setCollapsible(1, True)   # phases pane
-            self.mys_v_splitter.setCollapsible(2, False)  # chart
-        else:
-            self.mys_v_splitter.setCollapsible(0, True)   # phases pane
-            self.mys_v_splitter.setCollapsible(1, False)  # chart
+        # Panes are now: phases (collapsible) | chart (protected) | footer.
+        # The hero is a fixed bar in the main layout, no longer a pane here.
+        self.mys_v_splitter.setCollapsible(0, True)   # phases pane
+        self.mys_v_splitter.setCollapsible(1, False)  # chart
 
         self.mys_v_splitter.setSizes(_mys_v_sizes)
         mainlayout.addWidget(self.mys_v_splitter, 1)
@@ -6933,11 +6937,16 @@ class ApplicationWindow(QMainWindow):
         'MySpresso/showPhases' preference. Hiding it hands the freed vertical
         space back to the chart. Called at startup and live from the settings
         dialog."""
-        pane = getattr(self, '_mys_phases_pane', None)
-        if pane is None:
-            return
         show = bool(QSettings().value('MySpresso/showPhases', True, type=bool))
-        pane.setVisible(show)
+        # The Développement tile now lives in the pilot column; toggle it
+        # directly. In the no-pilot fallback it sits in the phases pane, which
+        # we then hide too so no empty band is left behind.
+        if self.myspresso_phases is not None:
+            self.myspresso_phases.setVisible(show)
+        if not getattr(self, '_dev_in_pilot', False):
+            pane = getattr(self, '_mys_phases_pane', None)
+            if pane is not None:
+                pane.setVisible(show)
 
     def myspressoApplyMainLCDStyles(self) -> None:
         """(Re-)apply the main/extra/phase LCD styles from the current

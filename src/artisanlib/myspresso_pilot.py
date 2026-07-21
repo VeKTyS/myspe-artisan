@@ -218,6 +218,13 @@ class MySpressoPilotColumn(QFrame):
         self._refresh_values()
         self._refresh.start()
 
+    def set_phase_tile(self, tile: QWidget) -> None:
+        """Host the Développement phase tile at the very top of the column
+        (far right of the chart), above the ΔBT readout."""
+        layout = self.layout()
+        if layout is not None:
+            layout.insertWidget(0, tile)
+
     def set_native_lcds(self, lcd_frame: QWidget) -> None:
         """Re-parent the native Artisan LCD tile panel below the ΔBT row. Its
         visibility keeps following Artisan's Readings toggle (showLCDs/hideLCDs
