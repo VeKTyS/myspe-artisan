@@ -61,7 +61,9 @@ class MySpressoPilotColumn(QFrame):
         super().__init__(parent)
         self.setObjectName('MysPilot')
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setMinimumWidth(170)
+        # Wide enough that the Développement tile hosted at the top always fits,
+        # even when a saved splitter state restores a narrow pilot width.
+        self.setMinimumWidth(190)
 
         # Registries of colour-bearing sub-widgets, restyled by _apply_theme().
         self._kickers: list[QLabel] = []

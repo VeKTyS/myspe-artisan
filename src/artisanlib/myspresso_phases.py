@@ -55,7 +55,7 @@ class _PhaseTile(QFrame):
     def __init__(self, kicker: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName('MysPhaseTile')
-        self.setMinimumWidth(150)
+        self.setMinimumWidth(120)
         self.setMaximumWidth(230)
 
         self.state: str = 'idle'  # 'idle' | 'active' | 'done'
@@ -172,13 +172,14 @@ class MySpressoPhaseTiles(QFrame):
         self._dev = _PhaseTile('DÉVELOPPEMENT')
         self._tiles = (self._dev,)
 
+        # Tight margins and no centring stretches: the single tile fills the
+        # width it is given, so it stays visible even in the narrow pilot column
+        # it now lives in (far right of the chart).
         row = QHBoxLayout(self)
-        row.setContentsMargins(20, 8, 20, 8)
+        row.setContentsMargins(8, 6, 8, 6)
         row.setSpacing(10)
-        row.addStretch()
         for t in self._tiles:
             row.addWidget(t)
-        row.addStretch()
 
         self._aw: ApplicationWindow | None = None
         self._refresh = QTimer(self)
