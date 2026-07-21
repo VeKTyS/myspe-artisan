@@ -1383,23 +1383,29 @@ class TestRenderAmount:
             return stock.renderAmount(amount, default_unit)
 
     def test_fractional_below_one_bag(self) -> None:
-        """A stock under one full bag rounds to the nearest half-bag."""
+        """A stock under one full bag rounds UP to the next half-bag."""
         assert self._render(30.0, {'name': 'bag', 'size': 69}).endswith('0.5bags')
 
     def test_exactly_one_bag_is_singular(self) -> None:
         assert self._render(69.0, {'name': 'bag', 'size': 69}).endswith('1bag')
 
     def test_whole_count_has_no_decimal(self) -> None:
-        """An exact multiple renders as an integer, no trailing '.0'."""
+        """An exact multiple renders as an integer, no trailing '.0' (and the
+        float slack keeps 828/69 = 12 from tipping up to 12.5)."""
         assert self._render(828.0, {'name': 'bag', 'size': 69}).endswith('12bags')
 
-    def test_fractional_above_one_bag(self) -> None:
-        """A fractional count above one bag rounds to the nearest half-bag."""
-        assert self._render(110.0, {'name': 'bag', 'size': 69}).endswith('1.5bags')
+    def test_fractional_above_one_bag_rounds_up(self) -> None:
+        """A fractional count above one bag rounds UP to the next half-bag:
+        110/69 = 1.59 -> 2 bags (ceil to 0.5), matching the decrement rule."""
+        assert self._render(110.0, {'name': 'bag', 'size': 69}).endswith('2bags')
 
-    def test_below_half_bag_is_kg_only(self) -> None:
-        """A stock rounding under half a bag shows kg only (no '0bags')."""
-        assert self._render(10.0, {'name': 'bag', 'size': 69}) == 'KG'
+    def test_just_over_a_bag_rounds_up_to_one_and_a_half(self) -> None:
+        """Any partial bag over a whole one jumps to the next half-bag."""
+        assert self._render(70.0, {'name': 'bag', 'size': 69}).endswith('1.5bags')
+
+    def test_small_positive_stock_rounds_up_to_half_bag(self) -> None:
+        """A tiny but non-zero stock rounds UP to half a bag (never '0bags')."""
+        assert self._render(10.0, {'name': 'bag', 'size': 69}).endswith('0.5bags')
 
     def test_no_default_unit_is_kg_only(self) -> None:
         """Without a per-unit size, only the kg figure is shown (no bags)."""

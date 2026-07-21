@@ -491,10 +491,13 @@ def renderAmount(amount:float, default_unit:CoffeeUnit|None=None, target_unit_id
         if default_unit is not None:
             unit_size = int(default_unit['size'])
             if unit_size > 0:
-                # Bag count = kg / per-bag weight (the server exposes the size
-                # on every coffee), rounded to the nearest half-bag so it reads
-                # as a clean X.0 or X.5. Sub-half-bag stocks fall back to kg.
-                bags = math.floor(amount / unit_size * 2 + 0.5) / 2
+                # Bag count = kg / per-bag weight, rounded UP to the next
+                # half-bag (ceil to 0.5) so the shown count matches the
+                # inventory decrement rule: any partial bag counts as a full
+                # half-bag opened. The 1e-9 slack keeps exact multiples
+                # (e.g. 828/69 = 12) from tipping to 12.5 on float error.
+                # Only a ~0 amount falls back to kg only.
+                bags = math.ceil(amount / unit_size * 2 - 1e-9) / 2
                 if bags < 0.5:
                     return kg_str
                 bags_str = f'{bags:g}'
