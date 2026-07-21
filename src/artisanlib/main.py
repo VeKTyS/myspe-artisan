@@ -4648,7 +4648,17 @@ class ApplicationWindow(QMainWindow):
 
     def _show_update_banner(self, version: str, url: str, name: str, size: int) -> None:
         from artisanlib.updater import UpdateBanner
+        # Avoid stacking a second banner when one is already showing (e.g. the
+        # startup check surfaced it and the user then hits 'Check for Updates').
+        existing = getattr(self, '_update_banner', None)
+        if existing is not None:
+            try:
+                if existing.isVisible():
+                    return
+            except RuntimeError:
+                pass  # previous banner was deleted; fall through and make a new one
         banner = UpdateBanner(version, url, name, size, self.main_widget, aw=self)
+        self._update_banner = banner
         layout = self.main_widget.layout()
         if layout is not None:
             insert_pos = 1 if self.myspresso_header is not None else 0
@@ -25243,47 +25253,30 @@ class ApplicationWindow(QMainWindow):
     @pyqtSlot()
     @pyqtSlot(bool)
     def checkUpdate(self, _:bool = False) -> None:
-        update_url = '<a href="https://myspresso.com">https://myspresso.com</a>'
-        update_str = QApplication.translate('About', 'There was a problem retrieving the latest version information.  Please check your Internet connection, try again later, or check manually.')
-        import json
-        import json.decoder
-        try:
-            import requests
-            r = requests.get('https://api.github.com/repos/VeKTyS/myspe-artisan/releases/latest', timeout=(2,4))
-            if r.status_code != 204 and r.headers['content-type'].strip().startswith('application/json'):
-                response = r.json()
-                if 'tag_name' in response:
-                    tag_name = r.json()['tag_name']
-                    match = re.search(r'[\d\.]+',tag_name)
-                    if match is not None:
-                        latest = match.group(0)
-                        if latest > __version__:
-                            update_str = QApplication.translate('About', 'A new release is available.')
-                            update_str += '<br/><a href="https://github.com/VeKTyS/myspe-artisan/releases">'
-                            update_str +=  QApplication.translate('About', 'Show Change list')
-                            update_str += '<br/><a href="https://github.com/VeKTyS/myspe-artisan/releases/tag/' + str(tag_name) + '">'
-                            update_str +=  QApplication.translate('About', 'Download Release') + ' ' + str(tag_name)
-                        elif latest == __version__ :
-                            update_str = QApplication.translate('About', 'You are using the latest release.')
-                        elif latest < __version__:
-                            update_str = QApplication.translate('About', 'You are using a beta continuous build.')
-                            update_str += '<br/><br/>' + QApplication.translate('About', 'You will see a notice here once a new official release is available.')
-        except json.decoder.JSONDecodeError as e:
-            if not e.doc:
-                _log.error('Empty response in checkUpdate.')
-            else:
-                _log.error("Decoding error at char %s (line %s, col %s): '%s'", e.pos, e.lineno, e.colno, e.doc)
-        except ValueError:
-            _log.error('checkUpdate response content is not valid JSON')
-        except Exception as ex: # pylint: disable=broad-except
-            _log.exception(ex)
-            _a, _b, exc_tb = sys.exc_info()
-            self.qmc.adderror((QApplication.translate('Error Message','Exception:') + ' checkUpdate() {0}').format(str(ex)),getattr(exc_tb, 'tb_lineno', '?'))
+        # Manual 'Check for Updates': run the same in-app updater as the startup
+        # check (against our own repo) so the user can download AND install from
+        # inside the app. Unlike the startup check it re-offers a version the
+        # user previously dismissed, and it reports back when already up to date
+        # or when the check failed (the startup check stays silent on those).
+        from artisanlib.updater import UpdateChecker
+        self.update_checker = UpdateChecker(respect_skipped=False)
+        self.update_checker.update_available.connect(self._show_update_banner)
+        self.update_checker.no_update.connect(self._on_update_none)
+        self.update_checker.check_failed.connect(self._on_update_check_failed)
+        self.update_checker.start()
 
-        box = QMessageBox(self)
-        box.about(self,
-                QApplication.translate('About', 'Update status'),
-                f"""<p>{update_str}</p>{update_url}""")
+    @pyqtSlot()
+    def _on_update_none(self) -> None:
+        QMessageBox.information(self,
+            QApplication.translate('About', 'Update status'),
+            QApplication.translate('About', 'You are using the latest release.'))
+
+    @pyqtSlot(str)
+    def _on_update_check_failed(self, reason: str) -> None:
+        _log.info('manual update check failed: %s', reason)
+        QMessageBox.warning(self,
+            QApplication.translate('About', 'Update status'),
+            QApplication.translate('About', 'There was a problem retrieving the latest version information.  Please check your Internet connection, try again later, or check manually.'))
 
     def applicationscreenshot(self) -> None:
         imag = self.grab()

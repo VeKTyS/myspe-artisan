@@ -46,6 +46,14 @@ def _version_tuple(v: str) -> tuple[int, ...]:
 class UpdateChecker(QThread):
     update_available = pyqtSignal(str, str, str, int)
     # emits: (version, download_url, asset_name, asset_size)
+    no_update = pyqtSignal()        # already on the latest (or a dismissed one)
+    check_failed = pyqtSignal(str)  # network / parsing / no-asset failure
+
+    def __init__(self, respect_skipped: bool = True) -> None:
+        super().__init__()
+        # The automatic startup check honours a version the user dismissed; a
+        # manual 'Check for Updates' passes False so it always re-offers it.
+        self._respect_skipped = respect_skipped
 
     def run(self) -> None:
         from artisanlib import __version__
@@ -56,18 +64,25 @@ class UpdateChecker(QThread):
         try:
             r = requests.get(GITHUB_API_URL, timeout=(2, 4))
             if r.status_code != 200:
+                self.check_failed.emit(f'HTTP {r.status_code}')
                 return
             data = r.json()
-        except Exception:
+        except Exception as e:  # noqa: BLE001
+            self.check_failed.emit(str(e))
             return
 
         tag_name: str = data.get('tag_name', '')
         match = re.search(r'[\d.]+', tag_name)
         if not match:
+            self.check_failed.emit('no version tag in the latest release')
             return
         latest: str = match.group(0)
 
-        if _version_tuple(latest) <= _version_tuple(__version__) or latest == skipped:
+        if _version_tuple(latest) <= _version_tuple(__version__):
+            self.no_update.emit()
+            return
+        if self._respect_skipped and latest == skipped:
+            self.no_update.emit()
             return
 
         platform_key = 'artisan-mac' if sys.platform == 'darwin' else 'zabawa-roast-win'
@@ -78,6 +93,8 @@ class UpdateChecker(QThread):
                 size: int = asset.get('size', 0)
                 self.update_available.emit(latest, url, name, size)
                 return
+        # A newer release exists but ships no installer for this platform.
+        self.check_failed.emit('no installer for this platform in the latest release')
 
 
 class UpdateDownloader(QThread):

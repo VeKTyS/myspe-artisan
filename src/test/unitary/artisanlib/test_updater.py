@@ -424,3 +424,70 @@ def test_install_runs_when_idle():
         timer_mock.call_args.args[1]()  # invoke the scheduled callback
     assert timer_mock.call_args.args[0] == 800
     quit_mock.assert_called_once_with('/tmp/update.dmg')
+
+
+# ---------------------------------------------------------------------------
+# Manual check feedback signals (no_update / check_failed) + skip handling
+# ---------------------------------------------------------------------------
+
+def _run_checker(monkeypatch, tag, assets, *, version, skipped='', respect_skipped=True,
+                 status=200):
+    from artisanlib import updater as _u
+    from artisanlib.updater import UpdateChecker
+    monkeypatch.setattr(_u, '__version__', version, raising=False)
+    if status == 200:
+        resp = _make_response(tag, assets)
+    else:
+        resp = MagicMock()
+        resp.status_code = status
+    events: dict = {'available': None, 'no_update': 0, 'failed': None}
+    with patch('artisanlib.updater.requests') as mock_req, \
+         patch('artisanlib.updater.sys') as mock_sys, \
+         patch('artisanlib.updater.QSettings') as mock_qs:
+        mock_req.get.return_value = resp
+        mock_sys.platform = 'darwin'
+        mock_qs.return_value.value.return_value = skipped
+        c = UpdateChecker(respect_skipped=respect_skipped)
+        c.update_available.connect(lambda v, *_: events.__setitem__('available', v))
+        c.no_update.connect(lambda: events.__setitem__('no_update', events['no_update'] + 1))
+        c.check_failed.connect(lambda msg: events.__setitem__('failed', msg))
+        c.run()
+    return events
+
+
+def test_checker_signals_no_update_when_on_latest(monkeypatch):
+    e = _run_checker(monkeypatch, 'v4.3.5', [], version='4.3.5')
+    assert e['no_update'] == 1
+    assert e['available'] is None
+
+
+def test_checker_signals_no_update_for_dismissed_version(monkeypatch):
+    e = _run_checker(monkeypatch, 'v9.9.9',
+                     [{'name': 'artisan-mac-9.9.9.dmg', 'browser_download_url': 'u', 'size': 1}],
+                     version='4.3.5', skipped='9.9.9', respect_skipped=True)
+    assert e['no_update'] == 1
+    assert e['available'] is None
+
+
+def test_checker_manual_reoffers_dismissed_version(monkeypatch):
+    # respect_skipped=False (manual check) surfaces the update the user dismissed.
+    e = _run_checker(monkeypatch, 'v9.9.9',
+                     [{'name': 'artisan-mac-9.9.9.dmg', 'browser_download_url': 'u', 'size': 1}],
+                     version='4.3.5', skipped='9.9.9', respect_skipped=False)
+    assert e['available'] == '9.9.9'
+    assert e['no_update'] == 0
+
+
+def test_checker_signals_check_failed_on_http_error(monkeypatch):
+    e = _run_checker(monkeypatch, 'v9.9.9', [], version='4.3.5', status=503)
+    assert e['failed'] is not None and 'HTTP 503' in e['failed']
+
+
+def test_checker_signals_check_failed_when_no_asset_for_platform(monkeypatch):
+    # A newer release exists but has no macOS installer.
+    e = _run_checker(monkeypatch, 'v9.9.9',
+                     [{'name': 'zabawa-roast-win-x64-9.9.9-setup.exe',
+                       'browser_download_url': 'u', 'size': 1}],
+                     version='4.3.5')
+    assert e['failed'] is not None
+    assert e['available'] is None
