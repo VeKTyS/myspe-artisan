@@ -2391,7 +2391,7 @@ class editGraphDlg(ArtisanResizeablDialog):
 
                 #---- Coffees
 
-                self.plus_coffees = plus.stock.getCoffees(self.unitsComboBox.currentIndex(),self.plus_default_store)
+                self.plus_coffees = plus.stock.getCoffees(self.unitsComboBox.currentIndex(),self.plus_default_store,self.plus_entity_selected)
                 self.plus_coffees_combo.blockSignals(True)
                 self.plus_coffees_combo.clear()
                 self.plus_coffees_combo.resetInverted()
@@ -2429,7 +2429,7 @@ class editGraphDlg(ArtisanResizeablDialog):
                             hr_id = '',
                             label = self.aw.qmc.plus_custom_blend.name.strip(),
                             ingredients = [plus.stock.BlendIngredient(ratio = c.ratio, coffee = c.coffee) for c in self.aw.qmc.plus_custom_blend.components])
-                self.plus_blends = plus.stock.getBlends(self.unitsComboBox.currentIndex(),self.plus_default_store, custom_blend)
+                self.plus_blends = plus.stock.getBlends(self.unitsComboBox.currentIndex(),self.plus_default_store, custom_blend, entity=self.plus_entity_selected)
                 self.plus_blends_combo.blockSignals(True)
                 self.plus_blends_combo.clear()
                 self.plus_blends_combo.resetInverted()
@@ -6585,7 +6585,7 @@ class CoffeesComboBox(StockComboBox):
 
     @override
     def getItems(self, unit:int) -> list[str]:
-        plus_coffees = plus.stock.getCoffees(unit, self.parentDialog.plus_default_store)
+        plus_coffees = plus.stock.getCoffees(unit, self.parentDialog.plus_default_store, self.parentDialog.plus_entity_selected)
         return [''] + plus.stock.getCoffeesLabels(plus_coffees)
 
 class BlendsComboBox(StockComboBox):
@@ -6603,7 +6603,7 @@ class BlendsComboBox(StockComboBox):
                     hr_id = '',
                     label = self.parentDialog.aw.qmc.plus_custom_blend.name.strip(),
                     ingredients = [plus.stock.BlendIngredient(ratio = c.ratio, coffee= c.coffee) for c in self.parentDialog.aw.qmc.plus_custom_blend.components])
-        plus_blends = plus.stock.getBlends(unit,self.parentDialog.plus_default_store, custom_blend)
+        plus_blends = plus.stock.getBlends(unit,self.parentDialog.plus_default_store, custom_blend, entity=self.parentDialog.plus_entity_selected)
         blend_items:list[str] = plus.stock.getBlendLabels(plus_blends)
         return [''] + blend_items
 

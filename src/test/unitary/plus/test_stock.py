@@ -932,6 +932,39 @@ class TestCoffeeOperations:
             assert len(result) > 0
             # Should only include items from store1
 
+    def test_get_coffees_filtered_by_entity(self, mock_stock_semaphore:Mock) -> None:
+        """getCoffees(entity=X) returns only that company's stock, even when two
+        companies own a location with the same code (e.g. their VLG). Regression
+        guard: without the entity filter, picking a company leaked the other's
+        stock into the list."""
+        del mock_stock_semaphore
+        two_entity_stock = {
+            'coffees': [
+                {'hr_id': 'C1', 'label': 'Shared', 'stock': [
+                    {'location_hr_id': 'L1@myspresso', 'location_label': 'VLG - Myspresso',
+                     'amount': 1015, 'entity_hr_id': 'myspresso'},
+                    {'location_hr_id': 'L1@esperanza', 'location_label': 'VLG - Esperanza',
+                     'amount': 1050, 'entity_hr_id': 'esperanza'},
+                ]},
+            ]
+        }
+        with patch('plus.stock.stock', two_entity_stock), patch(
+            'plus.stock.coffeeLabel', return_value='Shared'
+        ):
+            stock.getCoffees.cache_clear()
+            mys = stock.getCoffees(0, None, 'myspresso')
+            stock.getCoffees.cache_clear()
+            esp = stock.getCoffees(0, None, 'esperanza')
+            stock.getCoffees.cache_clear()
+            both = stock.getCoffees(0, None, None)
+            stock.getCoffees.cache_clear()
+        assert [si['location_hr_id'] for _, (_, si) in mys] == ['L1@myspresso']
+        assert [si['amount'] for _, (_, si) in mys] == [1015]
+        assert [si['location_hr_id'] for _, (_, si) in esp] == ['L1@esperanza']
+        assert [si['amount'] for _, (_, si) in esp] == [1050]
+        # no filter still returns both locations
+        assert len(both) == 2
+
     def test_get_coffee_store(self, mock_stock_semaphore:Mock, sample_stock_data:dict[str,Any]) -> None:
         """Test getCoffeeStore function."""
         # Arrange

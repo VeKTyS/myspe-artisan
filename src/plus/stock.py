@@ -881,8 +881,12 @@ def getLocationLabel(c:Coffee, location_hr_id:str) -> str:
 
 # returns coffees with stock
 @functools.cache
-def getCoffees(weight_unit_idx:int, store:str|None = None) -> list[tuple[str, tuple[Coffee, StockItem]]]:
-    _log.debug('getCoffees(%s,%s)', weight_unit_idx, store)
+def getCoffees(weight_unit_idx:int, store:str|None = None, entity:str|None = None) -> list[tuple[str, tuple[Coffee, StockItem]]]:
+    # store filters to one exact location (most specific); when no store is
+    # picked, entity restricts to a single company's stock. Without an entity
+    # filter a company's stock would leak into another's (two companies can own
+    # a location with the same code, e.g. their respective VLG).
+    _log.debug('getCoffees(%s,%s,%s)', weight_unit_idx, store, entity)
     try:
         stock_semaphore.acquire(1)
         if stock is not None and 'coffees' in stock:
@@ -893,7 +897,13 @@ def getCoffees(weight_unit_idx:int, store:str|None = None) -> list[tuple[str, tu
                     default_unit = c.get('default_unit', None)
                     if 'stock' in c:
                         for s in c['stock']:
-                            if store is None or s['location_hr_id'] == store:
+                            if store is not None:
+                                matches = s['location_hr_id'] == store
+                            elif entity is not None:
+                                matches = s.get('entity_hr_id') == entity
+                            else:
+                                matches = True
+                            if matches:
                                 location = s['location_label']
                                 amount = s['amount']
                                 if (
@@ -1291,20 +1301,24 @@ def blend2beans(blend:BlendStructure, weight_unit_idx:int, weightIn:float=0) -> 
 #    it is a dict of the form { 'hr_id': '', 'label': <some string>, 'ingredients': [ {'ratio':<num>, 'coffee':<hr_id_str>},...] }
 
 @functools.cache
-def getStandardBlends(weight_unit_idx:int, store:str|None, acquire_lock:bool = True) -> list[BlendStructure]:
-    return getBlends(weight_unit_idx, store, None, acquire_lock)
+def getStandardBlends(weight_unit_idx:int, store:str|None, acquire_lock:bool = True, entity:str|None = None) -> list[BlendStructure]:
+    return getBlends(weight_unit_idx, store, None, acquire_lock, entity)
 
-def getBlends(weight_unit_idx:int, store:str|None, customBlend:Blend|None, acquire_lock:bool = True) -> list[BlendStructure]:
-#    _log.debug('getBlends(%s,%s)', weight_unit_idx, store)
+def getBlends(weight_unit_idx:int, store:str|None, customBlend:Blend|None, acquire_lock:bool = True, entity:str|None = None) -> list[BlendStructure]:
+#    _log.debug('getBlends(%s,%s,%s)', weight_unit_idx, store, entity)
     try:
         if acquire_lock:
             stock_semaphore.acquire(1)
         if stock is not None and ('blends' in stock or 'replBlends' in stock or customBlend is not None):
             res:dict[str,tuple[Blend, StockItem, float, CoffeeLabelDict, float, list[ReplacementBlend]]] = {}
-            if store is None:
-                stores = [getStoreId(s) for s in getStores(acquire_lock=False)]
-            else:
+            if store is not None:
                 stores = [store]
+            elif entity is not None:
+                # only the selected company's locations, so its blends never
+                # leak into another company's store list
+                stores = [getStoreId(s) for s in getStoresOfEntity(getStores(acquire_lock=False), entity)]
+            else:
+                stores = [getStoreId(s) for s in getStores(acquire_lock=False)]
             for s in stores:
                 location_label = ''
                 store_blends:list[Blend] = []
