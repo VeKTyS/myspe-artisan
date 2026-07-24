@@ -76,6 +76,15 @@ jobs:
           mkdir C:\projects
           mklink /J C:\projects\artisan %GITHUB_WORKSPACE%
 
+      # Windows Defender real-time scans every DLL/pyd PyInstaller extracts and
+      # writes, which is a major drag on the build. Exclude the build dirs.
+      # Non-fatal: if the policy can't be changed the build still works, just slower.
+      - name: Exclude build dirs from Windows Defender
+        shell: powershell
+        continue-on-error: true
+        run: |
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE","C:\projects\artisan","$env:RUNNER_TEMP" -ErrorAction SilentlyContinue
+
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
@@ -120,7 +129,15 @@ jobs:
           # expose makensis.exe on PATH for the "Build NSIS installer" step
           "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
+      - name: Cache vc_redist.x64.exe
+        id: cache-vcredist
+        uses: actions/cache@v4
+        with:
+          path: vc_redist.x64.exe
+          key: vc-redist-x64-vs17
+
       - name: Download vc_redist.x64.exe
+        if: steps.cache-vcredist.outputs.cache-hit != 'true'
         shell: powershell
         run: |
           # Le spec win cherche vc_redist.x64.exe dans le dossier parent de src

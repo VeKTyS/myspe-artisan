@@ -157,7 +157,10 @@ VIAddVersionKey FileVersion "${PRODUCT_VERSION}.${PRODUCT_BUILD}"
 VIAddVersionKey FileDescription "${PRODUCT_NAME} Installer"
 VIAddVersionKey ProductVersion "${PRODUCT_VERSION}.${PRODUCT_BUILD}"
 
-SetCompressor lzma
+; bzip2 instead of lzma: ~3× faster to compress on CI (the installer build was
+; ~5 min of the Windows job) for a ~15% larger installer. Switch back to lzma
+; if the auto-update download size matters more than build time.
+SetCompressor bzip2
 
 !include x64.nsh
 
