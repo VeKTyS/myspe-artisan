@@ -1,4 +1,4 @@
-__version__ = '4.3.8'
+__version__ = '4.3.9'
 __revision__ = ''
 __build__ = '0'
 __artisan_os__ = 'Linux'
