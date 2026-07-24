@@ -44,7 +44,7 @@ from PyQt6.QtWidgets import (
 )
 
 from artisanlib.styles import current_semantic_tokens
-from artisanlib.util import fromCtoFstrict
+from artisanlib.util import fromCtoFstrict, roast_elapsed_seconds
 
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow
@@ -287,22 +287,29 @@ class MySpressoPhaseTiles(QFrame):
         self._refresh.start()
 
     def _elapsed(self) -> float:
-        """Current roast clock in seconds (mirrors the hero timer logic)."""
+        """Current roast clock in seconds **since CHARGE** (mirrors the hero).
+
+        Must be measured from CHARGE to match the development start (which is
+        also relative to CHARGE); using the raw ON clock offset the dev counter
+        by the ON→CHARGE gap (it started at ~00:59 instead of 00:00).
+        """
         aw = self._aw
         if aw is None:
             return 0.0
         qmc = aw.qmc
+        live = monitor = 0.0
         try:
-            if getattr(qmc, 'flagstart', False):
-                return max(0.0, qmc.timeclock.elapsed() / 1000.0)
+            tc = qmc.timeclock
+            live = tc.elapsed() / 1000.0
+            monitor = tc.elapsedMilli() / 1000.0
         except Exception:  # noqa: BLE001
             pass
         try:
-            if qmc.timex and qmc.timeindex[0] > -1:
-                return max(0.0, qmc.timex[-1] - qmc.timex[qmc.timeindex[0]])
+            return roast_elapsed_seconds(
+                getattr(qmc, 'flagstart', False), getattr(qmc, 'flagon', False),
+                live, monitor, qmc.timex, qmc.timeindex)
         except Exception:  # noqa: BLE001
-            pass
-        return 0.0
+            return 0.0
 
     def _refresh_values(self) -> None:
         aw = self._aw

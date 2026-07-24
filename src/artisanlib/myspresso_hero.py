@@ -39,6 +39,7 @@ from PyQt6.QtWidgets import (
 )
 
 from artisanlib.styles import current_semantic_tokens
+from artisanlib.util import roast_elapsed_seconds
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QResizeEvent
@@ -339,18 +340,20 @@ class MySpressoHeroPanel(QFrame):
             # Use Artisan's authoritative ArtisanTime clock — it advances
             # every frame as long as monitoring is on, even when the user
             # has no real probe (in which case qmc.timex stays empty).
+            # Roast clock: resets to 0 at CHARGE (measured from CHARGE once
+            # charged), monitoring time since ON before that. See
+            # roast_elapsed_seconds — the ArtisanTime clock itself is never
+            # reset, only the displayed offset.
             elapsed = 0.0
             try:
-                if getattr(qmc, 'flagstart', False):
-                    elapsed = max(0.0, qmc.timeclock.elapsed() / 1000.0)
-                elif getattr(qmc, 'flagon', False):
-                    elapsed = max(0.0, qmc.timeclock.elapsedMilli() / 1000.0)
-                else:
-                    timez = _safe(lambda: qmc.timex, [])
-                    timeindex = _safe(lambda: qmc.timeindex, [-1])
-                    if (timez and timeindex and timeindex[0] >= 0
-                            and timeindex[0] < len(timez)):
-                        elapsed = max(0.0, timez[-1] - timez[timeindex[0]])
+                tc = qmc.timeclock
+                elapsed = roast_elapsed_seconds(
+                    getattr(qmc, 'flagstart', False),
+                    getattr(qmc, 'flagon', False),
+                    tc.elapsed() / 1000.0,
+                    tc.elapsedMilli() / 1000.0,
+                    _safe(lambda: qmc.timex, []),
+                    _safe(lambda: qmc.timeindex, [-1]))
             except Exception:  # noqa: BLE001
                 pass
             self._timer_label.setText(_fmt_mmss(elapsed))

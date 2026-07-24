@@ -1271,3 +1271,35 @@ def min_blocks(registers:list[int]) -> list[tuple[int,int]]:
     edges:Iterator[int] = iter(registers_sorted[:1] + sum(gaps, cast(list[int], [])) + registers_sorted[-1:])
     # sequences: eg. [(12392, 12394), (12462, 12463), (12465, 12465)]
     return list(zip(edges, edges, strict=True))
+
+
+def roast_elapsed_seconds(
+        flagstart:bool,
+        flagon:bool,
+        live_seconds:float,
+        monitor_seconds:float,
+        timex:list[float],
+        timeindex:list[int]) -> float:
+    """Roast clock (seconds) to display in the MySpresso timers.
+
+    Once CHARGE is marked the clock is measured **from CHARGE** (so it resets to
+    0 at CHARGE); before CHARGE it shows the raw monitoring time since ON. The
+    underlying ArtisanTime clock (``live_seconds``/``monitor_seconds``) always
+    runs from ON — the CHARGE reset is a pure display offset, never a clock
+    reset, because that clock drives the recorded ``timex`` timestamps.
+
+    - ``live_seconds``    : timeclock since ON, used while recording (flagstart)
+    - ``monitor_seconds`` : timeclock since ON, used while only monitoring (flagon)
+    - ``timex``/``timeindex`` : locate CHARGE (``timeindex[0]``) and its ON offset
+    """
+    charge_i = timeindex[0] if timeindex else -1
+    charged = charge_i is not None and charge_i >= 0 and bool(timex) and charge_i < len(timex)
+    if flagstart:
+        if charged:
+            return max(0.0, live_seconds - timex[charge_i])  # since CHARGE
+        return max(0.0, live_seconds)                        # since ON (monitoring)
+    if flagon:
+        return max(0.0, monitor_seconds)
+    if charged:
+        return max(0.0, timex[-1] - timex[charge_i])
+    return 0.0
