@@ -666,50 +666,17 @@ class AnimatedMajorEventPushButton(MajorEventPushButton):
     zcolor = pyqtProperty(QColor, getBackColor, setBackColor)
 
 class MinorEventPushButton(EventPushButton): # pylint: disable=too-few-public-methods
-    # MySpresso fork: outlined ghost chip by default (transparent fill, thin
-    # border, brand text — theme-aware). Once fired (Selected=true) the button
-    # fills with the provided background_color so the user can see the event
-    # was recorded.
+    # MySpresso fork: warm-gray resting chip. All the fired / current / upcoming
+    # colouring comes from the global artisan_event_button_style() template
+    # (applied in main.py), which follows upstream Artisan semantics:
+    #   • Selected=true  -> current / next event  (accent — like base's pink)
+    #   • flat           -> already fired          (quiet faded chip)
+    #   • [Selected=false]:!flat -> not yet        (the button's own colour)
+    # A per-button style override used to live here and shadowed that template,
+    # keying the fill on Selected (the keyboard cursor on the NEXT button) so the
+    # 2nd crack read as fired at 202 °C. Removed — the template is the source of truth.
     def __init__(self, text:str, parent:'QWidget|None' = None, background_color:str = '#7A736A') -> None:
         super().__init__(text, parent, background_color)
-        from artisanlib.styles import current_semantic_tokens  # noqa: PLC0415 (import cycle guard)
-        tok = current_semantic_tokens()
-        outlined = (
-            'QPushButton[Selected=false]:!flat:!hover:!pressed{'
-            'background-color: transparent;'
-            f'color: {tok.fg_brand};'
-            f'border: 1px solid {tok.border_strong};'
-            'border-radius: 2px;'
-            'padding: 4px 8px;'
-            '}'
-            'QPushButton[Selected=false]:!flat:hover:!pressed{'
-            f'background-color: {tok.surface_alt};'
-            f'color: {tok.fg_brand};'
-            f'border: 1px solid {tok.fg_muted};'
-            'border-radius: 2px;'
-            '}'
-            'QPushButton[Selected=false]:!flat:pressed{'
-            f'background-color: {background_color};'
-            f'color: {tok.fg_on_brand};'
-            'border: 1px solid ' + background_color + ';'
-            'border-radius: 2px;'
-            '}'
-            'QPushButton[Selected=true]:!flat{'
-            f'background-color: {background_color};'
-            f'color: {tok.fg_on_brand};'
-            'border: 1px solid ' + background_color + ';'
-            'border-radius: 2px;'
-            'padding: 4px 8px;'
-            '}'
-            'QPushButton:!enabled{'
-            'background-color: transparent;'
-            f'color: {tok.fg_muted};'
-            f'border: 1px solid {tok.border};'
-            'border-radius: 2px;'
-            '}'
-        )
-        self.default_style = outlined
-        self.setStyleSheet(outlined)
 
 class AuxEventPushButton(EventPushButton): # pylint: disable=too-few-public-methods
     # MySpresso fork: default warm (WARM_500) instead of upstream light gray.
