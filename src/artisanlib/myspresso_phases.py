@@ -14,6 +14,13 @@ develop), muted subtitle (DTR %), and a 3 px progress bar pinned to the
 bottom edge. States: ``done`` (green bar + ✓), ``active`` (accent border
 + accent bar + "en cours"), ``idle`` (dimmed).
 
+The development stopwatch is anchored to a fixed BT threshold of 202 °C
+(first-crack territory) — *not* to the 1C event marker (``timeindex[2]``).
+Several machines/events (Modbus, Santoker, WebSocket, manual crack) mark 1C
+before BT actually reaches 202 °C, which made the counter start too early;
+anchoring to the temperature crossing keeps it deterministic. See
+``development_display`` for the rule.
+
 (TP, SÉCHAGE and MAILLARD tiles were removed from the band by product
 decision — only DÉVELOPPEMENT is rendered.)
 
@@ -37,9 +44,16 @@ from PyQt6.QtWidgets import (
 )
 
 from artisanlib.styles import current_semantic_tokens
+from artisanlib.util import fromCtoFstrict
 
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow
+
+
+# BT (in °C) at which the development stopwatch starts. Fixed at 202 °C by
+# product decision ("toujours 202°C"); converted to °F when the scope runs in
+# Fahrenheit mode so the trigger stays physically 202 °C.
+DEV_THRESHOLD_C: float = 202.0
 
 
 def _fmt_mmss(seconds: float) -> str:
@@ -48,6 +62,70 @@ def _fmt_mmss(seconds: float) -> str:
     m = int(seconds) // 60
     s = int(seconds) % 60
     return f'{m:02d}:{s:02d}'
+
+
+def _dev_threshold(mode: str, threshold_c: float = DEV_THRESHOLD_C) -> float:
+    """The development threshold expressed in the active display unit."""
+    return fromCtoFstrict(threshold_c) if mode == 'F' else threshold_c
+
+
+def _dev_start_index(temp2: list[float], charge_i: int, threshold: float) -> int | None:
+    """Index of the first BT sample that reaches ``threshold`` on the way up.
+
+    BT must first sit *below* the threshold after CHARGE (which always happens
+    at the turning point) before a crossing is accepted, so residual drum heat
+    right after CHARGE cannot start the clock early. Invalid readings (the -1
+    sentinel) are skipped. Returns ``None`` while 202 °C has not been reached.
+    """
+    seen_below = False
+    for i in range(max(0, charge_i), len(temp2)):
+        v = temp2[i]
+        if v is None or v == -1:
+            continue
+        if not seen_below:
+            if v < threshold:
+                seen_below = True
+            continue
+        if v >= threshold:
+            return i
+    return None
+
+
+def development_display(
+    timex: list[float],
+    temp2: list[float],
+    timeindex: list[int],
+    mode: str,
+    now: float,
+    threshold_c: float = DEV_THRESHOLD_C,
+) -> tuple[str, str, str, float]:
+    """Compute the DÉVELOPPEMENT tile content from the fixed BT threshold.
+
+    The stopwatch is anchored to the first moment BT crosses 202 °C — NOT to the
+    1C event marker (``timeindex[2]``), which some machines/events set earlier.
+    Returns ``(value, subtitle, state, progress)`` for ``_PhaseTile.set_content``.
+    ``now`` is the roast clock (seconds since CHARGE).
+    """
+    if not timex or not timeindex or timeindex[0] < 0:
+        return ('--:--', '', 'idle', 0.0)
+    charge_i = timeindex[0]
+    t0 = timex[charge_i]
+    drop_i = timeindex[6]
+    drop_t = (timex[drop_i] - t0) if drop_i else None
+    total = drop_t if drop_t is not None else max(now, 1.0)
+
+    threshold = _dev_threshold(mode, threshold_c)
+    start_i = _dev_start_index(temp2, charge_i, threshold)
+    if start_i is None:
+        return ('--:--', '', 'idle', 0.0)
+
+    dev_start_t = timex[start_i] - t0
+    dev_end = drop_t if drop_t is not None else now
+    dev = max(0.0, dev_end - dev_start_t)
+    dtr = (dev / total * 100) if total else 0.0
+    state = 'done' if drop_t is not None else 'active'
+    progress = 1.0 if drop_t is not None else (dev / total if total else 0.0)
+    return (_fmt_mmss(dev), f'{dtr:.1f} %', state, progress)
 
 
 class _PhaseTile(QFrame):
@@ -232,27 +310,10 @@ class MySpressoPhaseTiles(QFrame):
             return
         qmc = aw.qmc
         try:
-            timex = qmc.timex
-            timeindex = qmc.timeindex
-            charge_i = timeindex[0]
-            if not timex or charge_i < 0:
-                self._dev.set_content('--:--', '', 'idle', 0.0)
-                return
-            t0 = timex[charge_i]
-            now = self._elapsed()
-            drop_t = timex[timeindex[6]] - t0 if timeindex[6] else None
-            total = drop_t if drop_t is not None else max(now, 1.0)
-            fcs_t = timex[timeindex[2]] - t0 if timeindex[2] else None
-
-            # DÉVELOPPEMENT — FC START → DROP (DTR)
-            if fcs_t is not None:
-                dev_end = drop_t if drop_t is not None else now
-                dev = max(0.0, dev_end - fcs_t)
-                dtr = dev / total * 100 if total else 0.0
-                state = 'done' if drop_t is not None else 'active'
-                self._dev.set_content(_fmt_mmss(dev), f'{dtr:.1f} %',
-                                      state, 1.0 if drop_t is not None else dev / total)
-            else:
-                self._dev.set_content('--:--', '', 'idle', 0.0)
+            # DÉVELOPPEMENT — stopwatch anchored to the 202 °C BT crossing (not
+            # the 1C event marker), running until DROP. See development_display.
+            value, sub, state, progress = development_display(
+                qmc.timex, qmc.temp2, qmc.timeindex, qmc.mode, self._elapsed())
+            self._dev.set_content(value, sub, state, progress)
         except Exception:  # noqa: BLE001
             pass
