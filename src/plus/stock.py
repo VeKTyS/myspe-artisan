@@ -99,6 +99,7 @@ class Coffee(TypedDict, total=False):
     screen_size: ScreenSize
     processing: str
     crop_date: CropDate
+    lot_number: str # green-coffee lot number (MySpresso beans.lot_number), read-only
 
 class BlendIngredient(TypedDict):
     coffee: str # coffees hr_id

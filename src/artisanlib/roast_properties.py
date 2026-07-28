@@ -2701,9 +2701,27 @@ class editGraphDlg(ArtisanResizeablDialog):
                 self.pus_amount_selected = None
             self.plus_amount_replace_selected = None
             self.fillCoffeeData(selected_coffee,prev_coffee_label,prev_blend_label)
+        self._refresh_lot_number()
         self.checkWeightIn()
         self.updatePlusSelectedLine()
         self.updateBagCount()
+
+    def _refresh_lot_number(self, coffee_dict:'plus.stock.Coffee|None' = None) -> None:
+        # Fill the read-only "N° de lot" field from the selected MySpresso coffee
+        # (beans.lot_number, exposed by /acoffees). Empty when no coffee is
+        # selected or the payload predates lot_number.
+        if not hasattr(self, 'plus_lot_value'):
+            return
+        lot = ''
+        try:
+            cd = coffee_dict
+            if cd is None and getattr(self, 'plus_coffee_selected', None):
+                cd = plus.stock.getCoffee(self.plus_coffee_selected)
+            if cd:
+                lot = str(cd.get('lot_number', '') or '')
+        except Exception:  # noqa: BLE001
+            lot = ''
+        self.plus_lot_value.setText(lot)
 
     def getBlendDictCurrentWeight(self, blend:tuple[str, tuple[plus.stock.Blend, plus.stock.StockItem, float, dict[str, str], float, list[tuple[float, plus.stock.Blend]]]]) -> plus.stock.Blend:
         if self.weightinedit.text() != '':
@@ -3123,13 +3141,27 @@ class editGraphDlg(ArtisanResizeablDialog):
             self._mys_store_box_ref = store_box
             id_grid.addWidget(store_box, 2, 4)
 
+        # Row: N° de lot — green-coffee lot number, read-only, auto-filled from the
+        # selected MySpresso coffee (beans.lot_number, exposed by /acoffees).
+        if hasattr(self, 'plus_coffees_combo'):
+            id_grid.addWidget(_field_label(QApplication.translate('Label', 'N° de lot')), 3, 0)
+            self.plus_lot_value = QLineEdit()
+            self.plus_lot_value.setReadOnly(True)
+            self.plus_lot_value.setPlaceholderText('—')
+            self.plus_lot_value.setStyleSheet(
+                f'QLineEdit {{ background-color: {tok.bg_raised};'
+                f' color: {tok.fg_primary}; border: 1px solid {tok.border_strong};'
+                ' border-radius: 2px; padding: 4px 8px; }')
+            id_grid.addWidget(self.plus_lot_value, 3, 1, 1, 2)
+            self._refresh_lot_number()
+
         # Row: Grains label + dark card wrapping beansedit
-        id_grid.addWidget(_field_label(QApplication.translate('Label', 'Beans')), 3, 0,
+        id_grid.addWidget(_field_label(QApplication.translate('Label', 'Beans')), 4, 0,
                           Qt.AlignmentFlag.AlignTop)
         # Tightened (was 96) so the dialog fits laptop screens by default.
         self.beansedit.setMinimumHeight(60)
         self.beansedit.setMaximumHeight(140)
-        id_grid.addWidget(_make_grains_card(self.beansedit), 3, 1, 1, 4)
+        id_grid.addWidget(_make_grains_card(self.beansedit), 4, 1, 1, 4)
 
         root.addLayout(id_grid)
 
