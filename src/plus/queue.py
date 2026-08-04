@@ -404,76 +404,36 @@ def queue_roast_item(roast_item:dict[str, Any]) -> bool:
 
     return queued
 
-# called on completed roasts with roast data
-# if roast_record is given, we assume an update is queued, otherwise a new
-# roast is queued
-#   a full roast_record requires at least
-#      - roast_id
-#      - date
-#      - amount
-#   an update only the roast_id
-# if unsynced is set (roast was not yet in sync DB) we always set current time as modified_at, overwriting the last saved dated
-# that might have been set by roast.getRoast()
+# Appelée à la fin d'une torréfaction et sur mise à jour des propriétés.
+#
+# ANCIEN COMPORTEMENT (supprimé) : la torréfaction était mise dans la
+# persistqueue de ce module et envoyée par POST /v1/aroast. Ce chemin perdait
+# les items — task_done() était appelé même après échec de toutes les
+# tentatives (queue_retries=2), les records partiels non « full » étaient
+# consommés sans être envoyés, et la file était purgée au bout de trois jours.
+# Il entrait de plus en conflit d'écriture avec upload-roast, qui écrase la
+# ligne entière : selon l'ordre d'arrivée, l'un effaçait le travail de l'autre.
+#
+# Les torréfactions passent désormais par plus/outbox.py, qui persiste sur
+# disque, réessaie indéfiniment avec backoff et n'acquitte qu'après avoir relu
+# un reçu serveur. Cette file reste en service pour la session live, le verrou
+# du planning et le référentiel.
+#
+# Les paramètres sont conservés pour ne pas toucher aux six sites d'appel : le
+# contenu envoyé est désormais le profil complet, qui contient de toute façon
+# tout ce que portaient roast_record et unsynced.
 def addRoast(roast_record:dict[str, Any]|None = None, unsynced:bool=False) -> None:
+    del roast_record, unsynced
     try:
-        _log.debug('addRoast(%s, %s)', roast_record, unsynced)
         aw = config.app_window
         if aw is None:
             _log.info('config.app_window is None')
-        elif aw.plus_readonly:
-            _log.info(
-                '-> roast not queued as users'
-                 ' account access is readonly'
-            )
-        elif queue is None:
-            _log.info(
-                '-> roast not queued as queue'
-                 ' is not running'
-            )
-        else:
-            r: dict[str, Any]
-            r = roast.getRoast() if roast_record is None else roast_record
-            # if modification date is not set yet, we add the current time as
-            # modified_at timestamp as float EPOCH with millisecond
-            if unsynced or 'modified_at' not in r:
-                r['modified_at'] = util.epoch2ISO8601(time.time())
-            _log.debug('-> roast: %s', r)
-            # check if all required data is available before queueing this up
-            if (
-                'roast_id' in r
-                and r['roast_id']
-                and (
-                    roast_record is not None
-                    or ('date' in r and r['date'] and 'amount' in r)
-                )
-            ):  # amount can be 0 but has to be present
-                # put in upload queue
-                _log.debug('-> put in queue')
-                aw.sendmessage(
-                    QApplication.translate(
-                        'Plus',
-                        'Queuing roast for upload to {}'
-                    ).format(config.app_name)
-                )  # @UndefinedVariable
-                rr: dict[str, Any]
-                if roast_record is not None:
-                    # on updates only changed attributes w.r.t. the current
-                    # cached sync record are uploaded
-                    rr = sync.diffCachedSyncRecord(r)
-                else:
-                    rr = r
-                # send zero values like 0 and '' for corresponding attributes as None to allow the server to clean those up
-                rr = sync.suppress_zero_values(rr)
-                queued:bool = queue_roast_item(rr)
-                if queued:
-                    _log.debug('-> roast queued up')
-                    if 'roast_id' in rr:
-                        _log.info('roast queued: %s', rr['roast_id'])
-                    _log.debug('-> qsize: %s', queue.qsize())
-            else:
-                _log.debug(
-                    '-> roast not queued as mandatory info missing'
-                )
+            return
+        from plus.outbox_enqueue import enqueue_current_roast
+        # ask_entity=False : cet appel peut survenir pendant l'enregistrement
+        # (DROP), où une boîte de dialogue modale serait intempestive. Sans
+        # société résolue, rien n'est enfilé et l'opérateur est averti.
+        enqueue_current_roast(aw, ask_entity=False)
     except Exception as e:  # pylint: disable=broad-except
         _log.exception(e)
 
