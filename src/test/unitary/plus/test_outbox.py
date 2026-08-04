@@ -235,3 +235,42 @@ def test_base_creee_par_une_version_anterieure_est_migree(tmp_path: Path) -> Non
         assert item.bean_label is None
     finally:
         store.close()
+
+
+# ---------------------------------------------------------------------------
+# Suppression manuelle : uniquement ce dont l'arrivée est prouvée
+# ---------------------------------------------------------------------------
+
+def test_delete_verified_supprime_les_confirmees(store: OutboxStore) -> None:
+    store.enqueue(UUID_A, 'v1', sync_record=None, entity_slug=None, batch_label=None, now=0.0)
+    store.mark_sent(UUID_A, http_status=201, server_roast_id='r1', bean_created=False,
+                    store_resolved=True, now=1.0)
+    store.mark_verified(UUID_A, now=1.0)
+    assert store.delete_verified([UUID_A]) == 1
+    assert store.all_items() == []
+
+
+def test_delete_verified_refuse_une_torref_non_livree(store: OutboxStore) -> None:
+    # L'invariant tient jusque dans le SQL : une torréfaction dont l'arrivée
+    # n'est pas prouvée ne peut pas disparaître, même sur demande explicite.
+    store.enqueue(UUID_A, 'v1', sync_record=None, entity_slug=None, batch_label=None, now=0.0)
+    store.enqueue(UUID_B, 'v2', sync_record=None, entity_slug=None, batch_label=None, now=0.0)
+    store.mark_error(UUID_B, http_status=400, error='x', permanent=True, now=0.0)
+    assert store.delete_verified([UUID_A, UUID_B]) == 0
+    assert len(store.all_items()) == 2
+
+
+def test_delete_verified_ne_touche_que_les_uuid_demandes(store: OutboxStore) -> None:
+    for uuid in (UUID_A, UUID_B):
+        store.enqueue(uuid, 'v', sync_record=None, entity_slug=None, batch_label=None, now=0.0)
+        store.mark_sent(uuid, http_status=201, server_roast_id=None, bean_created=False,
+                        store_resolved=True, now=1.0)
+        store.mark_verified(uuid, now=1.0)
+    assert store.delete_verified([UUID_A]) == 1
+    assert [i.uuid for i in store.all_items()] == [UUID_B]
+
+
+def test_delete_verified_sans_uuid_ne_fait_rien(store: OutboxStore) -> None:
+    store.enqueue(UUID_A, 'v1', sync_record=None, entity_slug=None, batch_label=None, now=0.0)
+    assert store.delete_verified([]) == 0
+    assert len(store.all_items()) == 1

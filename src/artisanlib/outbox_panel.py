@@ -181,10 +181,17 @@ class OutboxDialog(QDialog):
         ack_btn.setToolTip('Retire le rappel « grain créé automatiquement » '
                            'une fois la fiche complétée côté web.')
         ack_btn.clicked.connect(self._acknowledge_selected)
+        delete_btn = QPushButton('🗑')
+        delete_btn.setToolTip('Retire de la liste les torréfactions confirmées.\n'
+                              'Sans sélection, retire toutes les confirmées.\n'
+                              'Une torréfaction non confirmée ne peut pas être supprimée.')
+        delete_btn.setFixedWidth(40)
+        delete_btn.clicked.connect(self._delete_verified)
         actions.addWidget(retry_btn)
         actions.addWidget(retry_all_btn)
         actions.addWidget(copy_btn)
         actions.addWidget(ack_btn)
+        actions.addWidget(delete_btn)
         actions.addStretch()
         close_btn = QPushButton('Fermer')
         close_btn.clicked.connect(self.accept)
@@ -261,6 +268,53 @@ class OutboxDialog(QDialog):
         QMessageBox.information(
             self, 'ZABAWA.plus',
             f'{len(items)} erreur(s) copiée(s) — collez-les où vous voulez.')
+
+    def _delete_verified(self) -> None:
+        """Retire de la liste les torréfactions confirmées.
+
+        Le magasin refuse de supprimer autre chose que du confirmé ; on prévient
+        ici l'opérateur quand sa sélection contient des lignes non livrées,
+        plutôt que de les ignorer en silence.
+        """
+        store = self._worker.store
+        selected = self._selected_uuids()
+        items = store.all_items()
+        if selected:
+            targets = [i for i in items if i.uuid in selected]
+            verified = [i.uuid for i in targets if i.state == STATE_VERIFIED]
+            blocked = len(targets) - len(verified)
+        else:
+            verified = [i.uuid for i in items if i.state == STATE_VERIFIED]
+            blocked = 0
+
+        if not verified:
+            QMessageBox.information(
+                self, 'ZABAWA.plus',
+                'Aucune torréfaction confirmée à retirer.\n\n'
+                'Les torréfactions non confirmées restent dans la liste tant que '
+                "leur arrivée n'est pas prouvée — c'est ce qui garantit qu'aucune "
+                'ne se perd.')
+            return
+
+        answer = QMessageBox.question(
+            self, 'ZABAWA.plus',
+            f'Retirer {len(verified)} torréfaction(s) confirmée(s) de la liste ?\n\n'
+            'Elles restent enregistrées sur ZABAWA.plus : seule la trace locale '
+            'est effacée.')
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        removed = store.delete_verified(verified)
+        if blocked:
+            QMessageBox.information(
+                self, 'ZABAWA.plus',
+                f'{removed} retirée(s). {blocked} conservée(s) : leur arrivée '
+                "n'est pas encore confirmée.")
+        self.refresh()
+        try:
+            self._aw._refresh_outbox_badge()  # pylint: disable=protected-access
+        except Exception:  # pylint: disable=broad-except
+            pass
 
     def _acknowledge_selected(self) -> None:
         store = self._worker.store

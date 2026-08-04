@@ -390,6 +390,31 @@ class OutboxStore:
 
     # ------------------------------------------------------------- entretien
 
+    def delete_verified(self, uuids: list[str]) -> int:
+        """Supprime des items CONFIRMÉS. Renvoie le nombre effacé.
+
+        La condition `state = verified` est dans la requête SQL, pas seulement
+        dans l'appelant : c'est l'invariant du module — une torréfaction dont
+        l'arrivée n'est pas prouvée ne doit jamais pouvoir disparaître, y
+        compris par une fausse manœuvre dans l'interface.
+        """
+        if not uuids:
+            return 0
+        placeholders = ','.join('?' * len(uuids))
+        with self._lock:
+            rows = self._db.execute(
+                f'SELECT uuid, alog_path FROM outbox WHERE state=? AND uuid IN ({placeholders})',
+                (STATE_VERIFIED, *uuids)).fetchall()
+            for r in rows:
+                try:
+                    Path(r['alog_path']).unlink(missing_ok=True)
+                except OSError as e:
+                    _log.warning('suppression du .alog impossible (%s): %s', r['alog_path'], e)
+            self._db.executemany('DELETE FROM outbox WHERE uuid=?',
+                                 [(r['uuid'],) for r in rows])
+            self._db.commit()
+        return len(rows)
+
     def purge_verified(self, before: float) -> int:
         """Supprime les items acquittés avant `before`. N'efface JAMAIS le reste."""
         with self._lock:
