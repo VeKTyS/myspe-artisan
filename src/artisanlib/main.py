@@ -780,6 +780,7 @@ import plus.notifications
 import plus.blend
 import plus.stock
 import plus.schedule
+import plus.entity
 
 
 
@@ -4632,6 +4633,10 @@ class ApplicationWindow(QMainWindow):
 
         QTimer.singleShot(5000, self._start_update_check)
 
+        # File d'envoi des torréfactions : démarrée tôt et sans condition, pour
+        # que tout ce qui restait en attente d'un lancement précédent reparte.
+        QTimer.singleShot(2000, self._start_outbox)
+
         self.zoomInShortcut = QShortcut(QKeySequence.StandardKey.ZoomIn, self)
         self.zoomInShortcut.activated.connect(self.zoomIn)
         self.zoomOutShortcut = QShortcut(QKeySequence.StandardKey.ZoomOut, self)
@@ -4649,6 +4654,68 @@ class ApplicationWindow(QMainWindow):
         self.update_checker = UpdateChecker()
         self.update_checker.update_available.connect(self._show_update_banner)
         self.update_checker.start()
+
+    # MySpresso fork: file d'envoi des torréfactions vers ZABAWA.plus
+    def _start_outbox(self) -> None:
+        """Démarre la file d'envoi.
+
+        Volontairement indépendant de l'état de connexion : c'est justement
+        l'absence de connexion au démarrage qui empêchait auparavant les
+        torréfactions d'être seulement mises en file.
+        """
+        try:
+            from plus.outbox_worker import OutboxWorker
+            self.outbox_worker = OutboxWorker()
+            self.outbox_worker.changed.connect(self._refresh_outbox_badge)
+            self.outbox_worker.start()
+            self._refresh_outbox_badge()
+            self._warn_stale_outbox()
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+
+    @pyqtSlot()
+    def _refresh_outbox_badge(self) -> None:
+        """Met à jour la pastille d'état du header."""
+        try:
+            worker = getattr(self, 'outbox_worker', None)
+            if worker is None or self.myspresso_header is None:
+                return
+            from artisanlib.outbox_panel import badge_text
+            store = worker.store
+            self.myspresso_header.set_outbox_state(
+                badge_text(store.counts(), store.to_review_count()))
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+
+    def _warn_stale_outbox(self) -> None:
+        """Signale au démarrage les envois qui traînent depuis plus de 24 h."""
+        try:
+            worker = getattr(self, 'outbox_worker', None)
+            if worker is None:
+                return
+            from plus.outbox_worker import STALE_SECONDS
+            stale = worker.store.stale_items(older_than=STALE_SECONDS, now=libtime.time())
+            if stale:
+                self.sendmessage(QApplication.translate(
+                    'Plus',
+                    '{} torréfaction(s) attendent d\'être envoyées sur ZABAWA.plus depuis plus de 24 h'
+                ).format(len(stale)))
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+
+    def ask_entity(self) -> 'tuple[str, str]|None':
+        """Demande la société de rattachement. Renvoie (slug, libellé) ou None.
+
+        Appelée quand ni le magasin ni les Propriétés ne la donnent : mieux vaut
+        une question qu'une torréfaction envoyée sans rattachement, que le
+        serveur devra deviner.
+        """
+        try:
+            from artisanlib.outbox_panel import ask_entity_dialog
+            return ask_entity_dialog(self)
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+            return None
 
     def _show_update_banner(self, version: str, url: str, name: str, size: int) -> None:
         from artisanlib.updater import UpdateBanner
@@ -4668,128 +4735,20 @@ class ApplicationWindow(QMainWindow):
             insert_pos = 1 if self.myspresso_header is not None else 0
             layout.insertWidget(insert_pos, banner)
 
-    # MySpresso fork: force-push the current roast, bypassing the upstream
-    # CHARGE+DROP requirement enforced in roast_properties.py / canvas.py
-    # AND the queue Worker's is_full_roast_record gate.
-    # We POST directly via connection.sendData so the user gets immediate
-    # feedback in the status bar instead of waiting on the persistqueue.
+    # MySpresso fork: envoi manuel de la torréfaction courante.
+    #
+    # Cette action postait autrefois directement vers upload-roast, sans
+    # persistance ni reprise : une coupure réseau au mauvais moment perdait la
+    # torréfaction, et l'écriture entrait en conflit avec celle de la file plus.
+    # Elle se contente désormais de déposer dans l'outbox, qui envoie, vérifie
+    # et réessaie. L'opérateur garde un retour immédiat en barre d'état.
     def _pushRoastToMyspresso(self) -> None:
-        import uuid as _uuid
-        from PyQt6.QtCore import QDateTime
-        import plus.config as _pconfig
-        import plus.controller as _pctl
-
-        # Make sure we are connected (no-op when auth_enabled=False after
-        # the short-circuit, but still useful when auth_enabled=True).
-        if self.plus_account is None:
-            try:
-                _pctl.connect(clear_on_failure=False, interactive=False)
-            except Exception as e:  # pylint: disable=broad-except
-                _log.exception(e)
-
-        # Ensure the profile has a roast UUID (re-used across edits) and a
-        # date — backend requires both to identify and persist the roast.
-        if not self.qmc.roastUUID:
-            self.qmc.roastUUID = _uuid.uuid4().hex
-        if not self.qmc.roastdate or self.qmc.roastdate.toSecsSinceEpoch() == 0:
-            self.qmc.roastdate = QDateTime.currentDateTime()
-
-        # Artisan stores roastUUID in 32-char .hex form (no hyphens). The
-        # MySpresso backend validates UUIDs in canonical form (with hyphens),
-        # so normalize before sending. uuid.UUID() accepts both forms.
-        try:
-            canonical_uuid = str(_uuid.UUID(self.qmc.roastUUID))
-        except (ValueError, TypeError):
-            canonical_uuid = str(_uuid.uuid4())
-            self.qmc.roastUUID = canonical_uuid.replace('-', '')
-
-        # Read the bean/store selection from the canvas (set when the user
-        # selected Stock + Magasin and clicked OK in Roast Properties).
-        coffee = getattr(self.qmc, 'plus_coffee', None) or None
-        store = getattr(self.qmc, 'plus_store', None) or None
-
-        # Read weights from the canvas. self.qmc.weight is [green, roasted, unit].
-        try:
-            green_kg = float(self.qmc.weight[0])
-            roasted_kg = float(self.qmc.weight[1])
-            unit = str(self.qmc.weight[2])
-            # Convert to kg if user picked another unit.
-            if unit.lower() != 'kg':
-                # Lazy import to avoid touching top-level imports.
-                from artisanlib.util import convertWeight, weight_units
-                idx_from = weight_units.index(unit)
-                idx_kg = weight_units.index('Kg')
-                green_kg = float(convertWeight(green_kg, idx_from, idx_kg))
-                roasted_kg = float(convertWeight(roasted_kg, idx_from, idx_kg))
-        except Exception:  # pylint: disable=broad-except
-            green_kg = 0.0
-            roasted_kg = 0.0
-
-        if green_kg <= 0:
-            self.sendmessage(QApplication.translate(
-                'Plus',
-                'Renseignez d\'abord le poids vert dans Propriétés (Vert) avant d\'envoyer.'
-            ))
+        from plus.outbox_enqueue import enqueue_current_roast
+        # ask_entity=True : déclenché par l'opérateur, on peut lui demander la
+        # société si elle ne se déduit ni du magasin ni des Propriétés.
+        if not enqueue_current_roast(self, ask_entity=True):
             return
-        if coffee is None and store is None:
-            self.sendmessage(QApplication.translate(
-                'Plus',
-                'Sélectionnez un café et un magasin dans Propriétés avant d\'envoyer.'
-            ))
-            return
-
-        # Build the full profile dict and serialize as Python repr() — that
-        # is the native .alog format Artisan writes via util.serialize() and
-        # what the ZABAWA upload-roast Edge Function's alog parser expects.
-        # Empirically verified: sending json.dumps(profile) yields HTTP 400
-        # "Unexpected token: false"; repr(profile) yields HTTP 201.
-        try:
-            profile = self.getProfile()
-            alog_content = repr(profile)
-        except Exception as e:  # pylint: disable=broad-except
-            _log.exception(e)
-            self.sendmessage(QApplication.translate(
-                'Plus', 'Echec de l\'envoi: impossible de sérialiser le profil ({})'
-            ).format(str(e)))
-            return
-
-        payload = {
-            'id': canonical_uuid,
-            'alogContent': alog_content,
-        }
-        url = f'{_pconfig.upload_roast_url}?strategy=overwrite&updateInventory=true'
-
-        # POST directly via requests (not plus.connection.sendData) because
-        # the ZABAWA upload-roast Edge Function does NOT decompress gzipped
-        # bodies, and sendData auto-gzips when body > 500 bytes. Our alog
-        # payload is ~6KB so gzip would always trigger and yield HTTP 400
-        # "Invalid JSON body" (server reads gzip bytes as JSON).
-        import json as _json
-        import requests as _requests
-        try:
-            body = _json.dumps(payload, ensure_ascii=False).encode('utf-8')
-            self.sendmessage(QApplication.translate(
-                'Plus', 'Envoi de la torréfaction sur MySpresso…'
-            ))
-            r = _requests.post(
-                url,
-                data=body,
-                headers={'Content-Type': 'application/json; charset=utf-8'},
-                timeout=30,
-            )
-            if 200 <= r.status_code < 300:
-                self.sendmessage(QApplication.translate(
-                    'Plus', 'Torréfaction téléchargée avec succès sur MySpresso'
-                ))
-            else:
-                self.sendmessage(QApplication.translate(
-                    'Plus', 'Echec de l\'envoi: HTTP {} — {}'
-                ).format(r.status_code, r.text[:150]))
-        except Exception as e:  # pylint: disable=broad-except
-            _log.exception(e)
-            self.sendmessage(QApplication.translate(
-                'Plus', 'Echec de l\'envoi: {}'
-            ).format(str(e)))
+        self._refresh_outbox_badge()
 
     # checks a builds signature using the public key
     def app_signature_valid(self) -> bool:
@@ -16551,6 +16510,18 @@ class ApplicationWindow(QMainWindow):
             else:
                 self.qmc.plus_store = None
                 self.qmc.plus_store_label = None
+            # Société : la valeur du fichier prime ; à défaut, on la déduit du
+            # magasin composite, ce qui rattache tout seul les profils
+            # enregistrés avant l'introduction du champ.
+            self.qmc.plus_entity = plus.entity.resolve_entity_slug(
+                self.qmc.plus_store,
+                None,
+                decodeLocalStrict(profile['plus_entity']) if 'plus_entity' in profile else None)
+            self.qmc.plus_entity_label = (
+                decodeLocalStrict(profile['plus_entity_label'])
+                if 'plus_entity_label' in profile else None)
+            self.qmc.batchnumber = (
+                decodeLocalStrict(profile['batchnumber']) if 'batchnumber' in profile else None)
             if 'plus_coffee' in profile:
                 self.qmc.plus_coffee = decodeLocalStrict(profile['plus_coffee'])
                 if 'plus_coffee_label' in profile:
@@ -17622,6 +17593,17 @@ class ApplicationWindow(QMainWindow):
                 profile['plus_store'] = encodeLocalStrict(self.qmc.plus_store)
                 if self.qmc.plus_store_label is not None:
                     profile['plus_store_label'] = encodeLocalStrict(self.qmc.plus_store_label)
+            # Société propriétaire : écrite systématiquement, y compris quand
+            # elle est seulement déduite du magasin. Le fichier doit rester
+            # attribuable sans le référentiel des magasins (import web, CSV).
+            plus_entity = plus.entity.resolve_entity_slug(
+                self.qmc.plus_store, self.qmc.plus_entity, None)
+            if plus_entity is not None:
+                profile['plus_entity'] = encodeLocalStrict(plus_entity)
+                if self.qmc.plus_entity_label is not None:
+                    profile['plus_entity_label'] = encodeLocalStrict(self.qmc.plus_entity_label)
+            if self.qmc.batchnumber:
+                profile['batchnumber'] = encodeLocalStrict(self.qmc.batchnumber)
             if self.qmc.plus_coffee is not None:
                 profile['plus_coffee'] = encodeLocalStrict(self.qmc.plus_coffee)
                 if self.qmc.plus_coffee_label is not None:

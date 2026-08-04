@@ -10,8 +10,9 @@ main window is fully constructed.
 
 from __future__ import annotations
 
+import logging
 import pathlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QColor, QIcon
@@ -29,6 +30,8 @@ from artisanlib.styles import current_semantic_tokens
 if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow
 
+
+_log: Final[logging.Logger] = logging.getLogger(__name__)
 
 _ICON_DIR = pathlib.Path(__file__).parent.parent / 'icons' / 'myspresso'
 
@@ -102,6 +105,18 @@ class MySpressoHeader(QFrame):
         self._cloud_badge.setFixedHeight(22)
         layout.addWidget(self._cloud_badge)
 
+        # ── Badge d'état de la file d'envoi ─────────────────────────────────
+        # Un échec d'envoi était jusqu'ici totalement silencieux : le
+        # torréfacteur ne l'apprenait qu'en consultant le web, des jours plus
+        # tard. Ce badge est cliquable et ouvre le détail de la file.
+        self._outbox_badge = QLabel('✓ à jour')
+        self._outbox_badge.setObjectName('outboxBadge')
+        self._outbox_badge.setFixedHeight(22)
+        self._outbox_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._outbox_badge.setToolTip("État de la file d'envoi vers ZABAWA.plus")
+        self._outbox_badge.mousePressEvent = self._on_outbox_clicked  # type: ignore[method-assign]
+        layout.addWidget(self._outbox_badge)
+
         # ── UI mode badge — square outlined card (MySpresso DA) ─────────────
         self._mode_badge = QLabel('·  MODE STANDARD')
         self._mode_badge.setObjectName('modeBadge')
@@ -112,7 +127,7 @@ class MySpressoHeader(QFrame):
         # the warm header background (cards quasi-carrés + ombres subtiles).
         # Colours are (re-)applied in _apply_theme().
         self._badge_shadows: list[QGraphicsDropShadowEffect] = []
-        for _badge in (self._cloud_badge, self._mode_badge):
+        for _badge in (self._cloud_badge, self._outbox_badge, self._mode_badge):
             _shadow = QGraphicsDropShadowEffect(self)
             _shadow.setBlurRadius(8)
             _shadow.setOffset(0, 1)
@@ -158,6 +173,8 @@ class MySpressoHeader(QFrame):
             _shadow.setColor(shadow_colour)
         # Re-render the cloud badge so the status dot picks up theme colours.
         self.set_connected(self._connected)
+        # Idem pour le badge de la file, dont la couleur dépend de son contenu.
+        self.set_outbox_state(self._outbox_badge.text())
 
     def restyle(self) -> None:
         """Public hook: re-resolve tokens after a light/dark switch."""
@@ -190,6 +207,35 @@ class MySpressoHeader(QFrame):
     def set_mode(self, mode_label: str) -> None:
         # Small middle-dot before the mode label matches the mockup.
         self._mode_badge.setText(f'·  MODE {mode_label.upper()}')
+
+    def set_outbox_state(self, text: str) -> None:
+        """Affiche l'état de la file d'envoi (texte produit par outbox_panel)."""
+        self._outbox_badge.setText(text)
+        # Rouge dès qu'une torréfaction demande une action, neutre sinon.
+        needs_action = 'échec' in text or 'vérifier' in text
+        tok = current_semantic_tokens()
+        colour = tok.accent if needs_action else tok.fg_secondary
+        self._outbox_badge.setStyleSheet(
+            'QLabel#outboxBadge {'
+            f' color: {colour};'
+            f' background-color: {tok.bg_raised};'
+            f' border: 1px solid {tok.border_strong};'
+            ' border-radius: 2px;'
+            ' padding: 3px 12px;'
+            ' font-size: 10px; font-weight: 700;'
+            ' letter-spacing: 0.05em;'
+            '}'
+        )
+
+    def _on_outbox_clicked(self, _event: object) -> None:
+        aw = getattr(self, '_app_window', None)
+        if aw is None:
+            return
+        try:
+            from artisanlib.outbox_panel import open_outbox_dialog
+            open_outbox_dialog(aw)
+        except Exception:  # pylint: disable=broad-except
+            _log.exception("ouverture du panneau de la file d'envoi")
 
     def host_action_buttons(
         self,
@@ -248,6 +294,8 @@ class MySpressoHeader(QFrame):
 
     def wire(self, app_window: ApplicationWindow) -> None:
         """Connect to ApplicationWindow signals to keep badges in sync."""
+        # Référence gardée pour ouvrir le panneau de la file au clic sur le badge.
+        self._app_window = app_window
         # Initial state — `plus_account` is set when connected.
         try:
             self.set_connected(app_window.plus_account is not None)
