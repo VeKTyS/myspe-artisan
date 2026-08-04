@@ -148,9 +148,17 @@ class ProfileData(TypedDict, total=False):
     locale: str
     plus_store: str
     plus_store_label: str
+    # Société propriétaire de la torréfaction (slug ZABAWA.plus, p.ex.
+    # 'esperanza'). Portée par le fichier pour que l'attribution survive à un
+    # réimport ou à une lecture CSV, sans dépendre du magasin.
+    plus_entity: str
+    plus_entity_label: str
     plus_coffee: str
     plus_coffee_label: str
     plus_blend_label: str
+    # Batch number textuel de repli ('#42bis'), écrit quand Artisan n'a pas
+    # attribué de roastbatchnr. Lu par le serveur juste après roastbatchnr.
+    batchnumber: str
     plus_blend_spec: 'BlendList'
     plus_blend_spec_labels: list[str]
     beans: str

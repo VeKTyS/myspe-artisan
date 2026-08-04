@@ -341,7 +341,8 @@ class tgraphcanvas(QObject):
         'DeltaETBflag', 'DeltaBTBflag', 'clearBgbeforeprofileload', 'setBatchSizeFromBackground', 'hideBgafterprofileload', 'heating_types', 'operator', 'organization', 'roastertype', 'roastersize', 'roasterheating', 'drumspeed',
         'organization_setup', 'operator_setup', 'roastertype_setup', 'roastersize_setup', 'roastersize_setup_default', 'roasterheating_setup', 'roasterheating_setup_default', 'drumspeed_setup', 'last_batchsize', 'machinesetup_energy_ratings',
         'machinesetup', 'roastingnotes', 'cuppingnotes', 'roastdate', 'roastepoch', 'roastepoch_timeout', 'lastroastepoch', 'batchcounter', 'batchsequence', 'batchprefix', 'neverUpdateBatchCounter',
-        'roastbatchnr', 'roastbatchprefix', 'roastbatchpos', 'roasttzoffset', 'roastUUID', 'scheduleID', 'scheduleDate', 'plus_default_store', 'plus_store', 'plus_store_label', 'plus_coffee',
+        'roastbatchnr', 'roastbatchprefix', 'roastbatchpos', 'batchnumber', 'roasttzoffset', 'roastUUID', 'scheduleID', 'scheduleDate', 'plus_default_store', 'plus_store', 'plus_store_label',
+        'plus_entity', 'plus_entity_label', 'plus_coffee',
         'plus_coffee_label', 'plus_blend_spec', 'plus_blend_spec_labels', 'plus_blend_label', 'plus_custom_blend', 'plus_sync_record_hash', 'plus_file_last_modified', 'beans', 'ETprojectFlag', 'BTprojectFlag', 'curveVisibilityCache', 'ETcurve', 'BTcurve',
         'ETlcd', 'BTlcd', 'swaplcds', 'LCDdecimalplaces', 'foregroundShowFullflag', 'interpolateDropsflag', 'DeltaETflag', 'DeltaBTflag', 'DeltaETlcdflag', 'DeltaBTlcdflag',
         'swapdeltalcds', 'PIDbuttonflag', 'Controlbuttonflag', 'deltaETfilter', 'deltaBTfilter', 'curvefilter', 'deltaETspan', 'deltaBTspan',
@@ -1683,6 +1684,14 @@ class tgraphcanvas(QObject):
         # the current profiles coffee or blend and associated store ids (saved in the *.alog profile)
         self.plus_store:str|None = None # holds the plus hr_id of the selected store of the current profile or None
         self.plus_store_label:str|None = None # holds the plus label of the selected store of the current profile or None
+        # Société propriétaire (slug ZABAWA.plus, p.ex. 'esperanza'), déduite du
+        # magasin composite ou choisie dans Propriétés. Sans elle, le serveur ne
+        # peut ni requalifier le magasin ni résoudre le grain (« Grain inconnu »).
+        self.plus_entity:str|None = None
+        self.plus_entity_label:str|None = None
+        # Batch number textuel de repli ('#42bis') quand Artisan n'en a pas
+        # attribué — voir plus.batch_number.
+        self.batchnumber:str|None = None
         self.plus_coffee:str|None = None # holds the plus hr_id of the selected coffee of the current profile or None
         self.plus_coffee_label:str|None = None # holds the plus label of the selected coffee of the current profile or None
         self.plus_blend_spec:Blend|None = None # the plus blend structure [<blend_label>,[[<coffee_label>,<hr_id>,<ratio>],...,[<coffee_label>,<hr_id>,<ratio>]]] # label + ingredients
@@ -4345,9 +4354,13 @@ class tgraphcanvas(QObject):
                     pass
 #PLUS
                 # only on first setting the DROP event (not set yet and no previous DROP undone), we upload to PLUS
-                if firstDROP and self.autoDROPenabled and self.aw.plus_account is not None:
+                # NOTE: la condition ne teste plus plus_account. L'enfilement ne
+                # doit dépendre d'aucune connexion : c'est précisément une
+                # connexion échouée au démarrage qui empêchait la torréfaction
+                # d'être seulement mise en file.
+                if firstDROP and self.autoDROPenabled:
                     # NOTE: scheduler is only active if connected to artisan.plus
-                    if self.aw.schedule_window is not None:
+                    if self.aw.schedule_window is not None and self.aw.plus_account is not None:
                         self.aw.schedule_window.register_completed_roast.emit()
                     try:
                         self.aw.updatePlusStatus()
@@ -15582,9 +15595,11 @@ class tgraphcanvas(QObject):
                             _log.exception(e)
     #PLUS
                         # only on first setting the DROP event (not set yet and no previous DROP undone) and (not anymore: if not in simulator modus, we upload to PLUS)
-                        if firstDROP and self.autoDROPenabled and self.aw.plus_account is not None:  # and not bool(self.aw.simulator): # we also upload simulated roasts to PLUS
+                        # NOTE: la condition ne teste plus plus_account — voir le
+                        # commentaire du DROP par action (même méthode, plus haut).
+                        if firstDROP and self.autoDROPenabled:  # and not bool(self.aw.simulator): # we also upload simulated roasts to PLUS
                             # NOTE: scheduler is only active if connected to artisan.plus
-                            if self.aw.schedule_window is not None:
+                            if self.aw.schedule_window is not None and self.aw.plus_account is not None:
                                 self.aw.schedule_window.register_completed_roast.emit()
                             try:
                                 self.aw.updatePlusStatus()

@@ -2659,6 +2659,25 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.populatePlusCoffeeBlendCombos(None)
         self.updateTitle(prev_coffee_label, prev_blend_label)
 
+    def _persist_entity_selection(self) -> None:
+        """Recopie la société choisie dans le profil (qmc.plus_entity).
+
+        Le sélecteur de société n'existait que pour filtrer les listes de ce
+        dialogue. En le persistant, le .alog porte son rattachement, ce qui le
+        rend attribuable même réimporté plus tard sans le référentiel des
+        magasins.
+        """
+        try:
+            slug = self.plus_entity_selected
+            self.aw.qmc.plus_entity = slug
+            label = None
+            if slug is not None:
+                label = next((plus.stock.getEntityLabel(e) for e in self.plus_entities
+                              if plus.stock.getEntityId(e) == slug), None)
+            self.aw.qmc.plus_entity_label = label
+        except Exception as e: # pylint: disable=broad-except
+            _log.exception(e)
+
     @pyqtSlot(int)
     def storeSelectionChanged(self, n:int) -> None:
         if n != -1:
@@ -6465,11 +6484,19 @@ class editGraphDlg(ArtisanResizeablDialog):
 #                self.aw.qmc.updateBackground()
                 self.aw.qmc.fig.canvas.draw()
 
+        # La société choisie dans le sélecteur ne servait qu'à filtrer les listes
+        # de ce dialogue : sans cette recopie elle n'existe nulle part dans le
+        # .alog, et le serveur doit deviner le rattachement (d'où les « Grain
+        # inconnu » et les stocks non décrémentés).
+        self._persist_entity_selection()
+
         if not self.aw.qmc.flagon:
             self.aw.sendmessage(QApplication.translate('Message','Roast properties updated but profile not saved to disk'))
-        # if recording, dirty and CHARGE and DROP set we send changes to artisan.plus if it is running and we are not in simmulator mode
+        # Torréfaction terminée et modifiée : on ré-enfile la version à jour.
+        # NOTE: la condition ne teste plus plus_account — l'envoi ne doit pas
+        # dépendre d'une connexion établie, c'est l'outbox qui gère la reprise.
         if (self.aw.qmc.flagstart and self.aw.qmc.safesaveflag and self.aw.qmc.timeindex[0] > -1 and self.aw.qmc.timeindex[6] > 0 and
-                self.aw.plus_account is not None and not bool(self.aw.simulator)):
+                not bool(self.aw.simulator)):
             try:
                 plus.queue.addRoast()
             except Exception as e: # pylint: disable=broad-except
