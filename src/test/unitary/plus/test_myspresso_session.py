@@ -79,3 +79,42 @@ def test_send_session_end_swallows_network_errors(_cfg: Any) -> None:
     with patch.object(myspresso_session.requests, 'post', side_effect=OSError('boom')):
         # must never raise — the GUI thread that stops the roast can't be broken
         myspresso_session.send_session_end(HEX_UUID)
+
+
+# ---------------------------------------------------------------------------
+# Ping d'ouverture de session : magasin, société et CODE du café
+#
+# Sans ces champs, la fiche de session tombait sur le magasin technique de repli
+# (« Imports Test »), qui appartient à MySpresso : une session Esperanza
+# s'affichait « MySpresso » par défaut d'attribution, pas par déduction.
+# ---------------------------------------------------------------------------
+
+def test_session_start_transmet_magasin_societe_et_code_cafe(_cfg: Any) -> None:
+    resp = MagicMock(status_code=201, text='ok')
+    with patch.object(myspresso_session.requests, 'post', return_value=resp) as post:
+        myspresso_session.send_session_start(
+            HEX_UUID, 'Diedrich 4-Sensor', 'C1124', 30.0,
+            coffee_label='Sumatra, SUMATRA 2026',
+            location='L1002@esperanza',
+            entreprise_slug='esperanza')
+
+    body = post.call_args[1]['json']
+    assert body['id'] == DASHED_UUID
+    assert body['coffee'] == 'C1124'            # le code, pas le libellé
+    assert body['coffee_label'] == 'Sumatra, SUMATRA 2026'
+    assert body['location'] == 'L1002@esperanza'
+    assert body['entreprise_slug'] == 'esperanza'
+    assert body['batch_size_kg'] == 30.0
+
+
+def test_session_start_omet_les_champs_inconnus(_cfg: Any) -> None:
+    # Champs absents plutôt que vides : le serveur garde ainsi ses propres
+    # replis (magasin et grain de l'item de planning).
+    resp = MagicMock(status_code=201, text='ok')
+    with patch.object(myspresso_session.requests, 'post', return_value=resp) as post:
+        myspresso_session.send_session_start(HEX_UUID, 'Diedrich', '', 30.0)
+
+    body = post.call_args[1]['json']
+    assert 'location' not in body
+    assert 'entreprise_slug' not in body
+    assert 'coffee_label' not in body

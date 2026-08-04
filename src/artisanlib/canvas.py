@@ -14843,8 +14843,20 @@ class tgraphcanvas(QObject):
                 # notify MySpresso webapp that a roast session has started
                 try:
                     from plus.myspresso_session import send_session_start
+                    from plus.entity import resolve_entity_slug
                     _machine = getattr(self, 'roastertype', '') or ''
-                    _coffee = getattr(self, 'plus_coffee_label', '') or ''
+                    # Le CODE du café, pas son libellé : « SUMATRA 2026 » existe
+                    # en fiches jumelles chez les deux sociétés, le serveur ne
+                    # peut pas trancher sur un libellé (et refuse de deviner).
+                    _coffee = getattr(self, 'plus_coffee', '') or ''
+                    _coffee_label = getattr(self, 'plus_coffee_label', '') or ''
+                    # Magasin et société : sans eux la fiche de session tombe sur
+                    # le magasin technique de repli, qui appartient à MySpresso.
+                    _location = getattr(self, 'plus_store', '') or ''
+                    _entity = resolve_entity_slug(
+                        getattr(self, 'plus_store', None),
+                        getattr(self, 'plus_entity', None),
+                        None) or ''
                     _batch_kg = 0.0
                     try:
                         from artisanlib.util import convertWeight, weight_units
@@ -14853,7 +14865,9 @@ class tgraphcanvas(QObject):
                         _batch_kg = convertWeight(_w_in, weight_units.index(_w_unit), weight_units.index('Kg')) or 0.0
                     except Exception:  # pylint: disable=broad-except
                         pass
-                    send_session_start(self.roastUUID or '', _machine, _coffee, _batch_kg)
+                    send_session_start(self.roastUUID or '', _machine, _coffee, _batch_kg,
+                                       coffee_label=_coffee_label, location=_location,
+                                       entreprise_slug=_entity)
                     self.myspresso_session_active = True
                 except Exception as e:  # pylint: disable=broad-except
                     _log.exception(e)

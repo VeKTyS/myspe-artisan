@@ -36,8 +36,22 @@ def send_session_start(
     machine: str,
     coffee: str,
     batch_size_kg: float,
+    coffee_label: str | None = None,
+    location: str | None = None,
+    entreprise_slug: str | None = None,
 ) -> None:
-    """POST /asession/start in a daemon thread — never blocks the GUI."""
+    """POST /asession/start in a daemon thread — never blocks the GUI.
+
+    `coffee` doit être le CODE du café (plus_coffee : UUID de fiche ou code
+    Zabawa), pas son libellé : le trigger résout par identifiant, un libellé
+    partagé par deux sociétés le laisse deviner et il refuse — à juste titre.
+
+    `location` (hr_id composite 'L1002@esperanza') et `entreprise_slug` sont ce
+    qui empêche la fiche de session d'être rattachée par défaut au magasin
+    technique de repli, qui appartient à MySpresso : sans eux, une session
+    Esperanza s'affichait « MySpresso » non par déduction, mais par la porte de
+    derrière.
+    """
 
     def _post() -> None:
         try:
@@ -64,6 +78,15 @@ def send_session_start(
                 'batch_size_kg': round(float(batch_size_kg), 3),
                 'date': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
+            # Champs additifs : omis quand ils sont inconnus, pour que le
+            # serveur garde ses propres replis (item de planning) plutôt que de
+            # recevoir des chaînes vides qui les court-circuiteraient.
+            if coffee_label:
+                data['coffee_label'] = coffee_label
+            if location:
+                data['location'] = location
+            if entreprise_slug:
+                data['entreprise_slug'] = entreprise_slug
             r = requests.post(
                 url,
                 json=data,
