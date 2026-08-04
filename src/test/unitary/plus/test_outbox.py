@@ -189,3 +189,49 @@ def test_stale_items_signale_les_envois_qui_trainent(store: OutboxStore) -> None
     store.enqueue(UUID_B, 'v2', sync_record=None, entity_slug=None, batch_label=None, now=100000.0)
     stale = store.stale_items(older_than=86400.0, now=100000.0)
     assert [i.uuid for i in stale] == [UUID_A]
+
+
+# ---------------------------------------------------------------------------
+# Date de torréfaction et libellé du grain
+# ---------------------------------------------------------------------------
+
+def test_enqueue_conserve_date_et_grain(store: OutboxStore) -> None:
+    item = store.enqueue(UUID_A, 'v1', sync_record=None, entity_slug='esperanza',
+                         batch_label='#42', now=1000.0,
+                         roast_at=1785000000.0, bean_label='Pérou APU')
+    assert item.roast_at == 1785000000.0
+    assert item.bean_label == 'Pérou APU'
+    relu = store.get(UUID_A)
+    assert relu is not None
+    assert relu.bean_label == 'Pérou APU'
+
+
+def test_base_creee_par_une_version_anterieure_est_migree(tmp_path: Path) -> None:
+    # Les items en attente doivent survivre à une mise à jour de l'app : une
+    # base sans les colonnes récentes doit être complétée, pas rejetée.
+    import sqlite3
+    db = sqlite3.connect(str(tmp_path / 'outbox.db'))
+    db.executescript("""
+        CREATE TABLE outbox (
+          uuid TEXT PRIMARY KEY, created_at REAL NOT NULL, updated_at REAL NOT NULL,
+          alog_path TEXT NOT NULL, sync_record_json TEXT, content_sha256 TEXT NOT NULL,
+          entity_slug TEXT, batch_label TEXT, state TEXT NOT NULL,
+          attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at REAL NOT NULL,
+          last_http_status INTEGER, last_error TEXT, server_roast_id TEXT,
+          bean_created INTEGER NOT NULL DEFAULT 0, store_resolved INTEGER,
+          review_ack INTEGER NOT NULL DEFAULT 0, sent_at REAL, verified_at REAL);
+        INSERT INTO outbox (uuid, created_at, updated_at, alog_path, content_sha256,
+                            state, next_attempt_at)
+        VALUES ('""" + UUID_A + """', 1.0, 1.0, 'x.alog', 'abc', 'pending', 1.0);
+    """)
+    db.commit()
+    db.close()
+
+    store = OutboxStore(str(tmp_path))
+    try:
+        item = store.get(UUID_A)
+        assert item is not None          # l'item d'avant la mise à jour est toujours là
+        assert item.roast_at is None     # colonne ajoutée, valeur vide
+        assert item.bean_label is None
+    finally:
+        store.close()

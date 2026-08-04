@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Final
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -41,6 +42,36 @@ _STATE_LABELS: Final[dict[str, str]] = {
     STATE_VERIFIED: 'confirmé',
     STATE_FAILED: 'échec',
 }
+
+
+def _format_roast_date(epoch: float | None) -> str:
+    """Date et heure de la torréfaction, format court français."""
+    if not epoch:
+        return '—'
+    try:
+        return time.strftime('%d/%m/%Y %H:%M', time.localtime(epoch))
+    except (ValueError, OSError, OverflowError):
+        return '—'
+
+
+def error_report(item: Any) -> str:
+    """Rapport d'erreur copiable, destiné à être collé tel quel dans un message.
+
+    On y met tout ce qu'il faut pour diagnostiquer sans accès au poste :
+    identifiant, lot, grain, société, état, code HTTP et message complet.
+    """
+    lines = [
+        f'Torréfaction : {item.batch_label or "—"} — {item.bean_label or "grain inconnu"}',
+        f'Date : {_format_roast_date(item.roast_at)}',
+        f'Société : {item.entity_slug or "—"}',
+        f'Identifiant : {item.uuid}',
+        f'État : {_STATE_LABELS.get(item.state, item.state)} '
+        f'({item.attempts} tentative(s))',
+    ]
+    if item.last_http_status:
+        lines.append(f'Code HTTP : {item.last_http_status}')
+    lines.append(f'Erreur : {item.last_error or "aucune"}')
+    return '\n'.join(lines)
 
 
 def badge_text(counts: dict[str, int], to_review: int) -> str:
@@ -116,7 +147,7 @@ class OutboxDialog(QDialog):
     """Détail de la file : une ligne par torréfaction, avec relance manuelle."""
 
     COLUMNS: Final[tuple[str, ...]] = (
-        'Lot', 'Société', 'État', 'Tentatives', 'Dernière erreur', 'Depuis')
+        'Lot', 'Torréfaction', 'Grain', 'Société', 'État', 'Tentatives', 'Dernière erreur')
 
     def __init__(self, aw: 'ApplicationWindow', worker: Any) -> None:
         super().__init__(aw)
@@ -132,7 +163,9 @@ class OutboxDialog(QDialog):
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         header = self._table.horizontalHeader()
         if header is not None:
-            header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+            # La colonne d'erreur prend la place restante : c'est elle qu'on
+            # vient lire quand quelque chose bloque.
+            header.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self._table)
 
         actions = QHBoxLayout()
@@ -140,12 +173,17 @@ class OutboxDialog(QDialog):
         retry_btn.clicked.connect(self._retry_selected)
         retry_all_btn = QPushButton('Tout réessayer')
         retry_all_btn.clicked.connect(self._retry_all)
+        copy_btn = QPushButton("Copier l'erreur")
+        copy_btn.setToolTip('Copie le détail complet de la ligne sélectionnée '
+                            '(lot, grain, société, code HTTP, message).')
+        copy_btn.clicked.connect(self._copy_error)
         ack_btn = QPushButton('Marquer comme vérifié')
         ack_btn.setToolTip('Retire le rappel « grain créé automatiquement » '
                            'une fois la fiche complétée côté web.')
         ack_btn.clicked.connect(self._acknowledge_selected)
         actions.addWidget(retry_btn)
         actions.addWidget(retry_all_btn)
+        actions.addWidget(copy_btn)
         actions.addWidget(ack_btn)
         actions.addStretch()
         close_btn = QPushButton('Fermer')
@@ -162,18 +200,20 @@ class OutboxDialog(QDialog):
     def refresh(self) -> None:
         items = self._worker.store.all_items()
         self._table.setRowCount(len(items))
-        now = time.time()
         for row, item in enumerate(items):
-            age_min = max(0, int((now - item.created_at) / 60))
-            age = f'{age_min} min' if age_min < 120 else f'{age_min // 60} h'
             state = _STATE_LABELS.get(item.state, item.state)
             if item.state == STATE_VERIFIED and item.bean_created and not item.review_ack:
                 state += ' — grain créé, à vérifier'
-            values = (item.batch_label or '—', item.entity_slug or '—', state,
-                      str(item.attempts), item.last_error or '', age)
+            values = (item.batch_label or '—', _format_roast_date(item.roast_at),
+                      item.bean_label or '—', item.entity_slug or '—', state,
+                      str(item.attempts), item.last_error or '')
             for col, value in enumerate(values):
                 cell = QTableWidgetItem(value)
                 cell.setData(Qt.ItemDataRole.UserRole, item.uuid)
+                # Message d'erreur complet en infobulle : la colonne le tronque
+                # visuellement, or c'est souvent la fin qui porte la cause.
+                if col == 6 and value:
+                    cell.setToolTip(value)
                 self._table.setItem(row, col, cell)
 
     def _selected_uuids(self) -> list[str]:
@@ -200,6 +240,27 @@ class OutboxDialog(QDialog):
                 store.retry(item.uuid, now=time.time())
         self._worker.wake()
         self.refresh()
+
+    def _copy_error(self) -> None:
+        """Copie le rapport des lignes sélectionnées dans le presse-papier.
+
+        Sans sélection, on prend toutes les lignes en erreur : c'est le geste
+        attendu quand on veut simplement transmettre « ce qui ne passe pas ».
+        """
+        store = self._worker.store
+        uuids = self._selected_uuids()
+        items = [i for i in store.all_items() if i.uuid in uuids] if uuids else [
+            i for i in store.all_items() if i.last_error]
+        if not items:
+            QMessageBox.information(self, 'ZABAWA.plus', 'Aucune erreur à copier.')
+            return
+        text = '\n\n'.join(error_report(i) for i in items)
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(text)
+        QMessageBox.information(
+            self, 'ZABAWA.plus',
+            f'{len(items)} erreur(s) copiée(s) — collez-les où vous voulez.')
 
     def _acknowledge_selected(self) -> None:
         store = self._worker.store

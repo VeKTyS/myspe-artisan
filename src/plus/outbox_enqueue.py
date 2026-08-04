@@ -165,6 +165,8 @@ def enqueue_current_roast(
             entity_slug=entity,
             batch_label=batch_label,
             now=_now(),
+            roast_at=_roast_epoch(qmc),
+            bean_label=_bean_label(qmc),
         )
         _log.info('torréfaction enfilée: %s (%s, %s)', item.uuid, batch_label, entity)
         _notify(aw, f'Torréfaction {batch_label or ""} en file d\'envoi vers ZABAWA.plus')
@@ -181,6 +183,35 @@ def enqueue_current_roast(
 def _now() -> float:
     import time
     return time.time()
+
+
+def _roast_epoch(qmc: Any) -> float | None:
+    """Date et heure de la torréfaction, en epoch.
+
+    roastepoch est renseigné par Artisan à CHARGE. Repli sur l'heure courante
+    plutôt que rien : dans le panneau de la file, une ligne sans date est
+    inexploitable pour retrouver la cuisson concernée.
+    """
+    try:
+        epoch = float(getattr(qmc, 'roastepoch', 0) or 0)
+        if epoch > 0:
+            return epoch
+    except (TypeError, ValueError):
+        pass
+    return _now()
+
+
+def _bean_label(qmc: Any) -> str | None:
+    """Libellé du café torréfié, tel qu'affiché dans la file.
+
+    Un mélange l'emporte sur un café simple (c'est ce que l'opérateur a choisi),
+    puis le libellé du café, puis les champs libres du profil.
+    """
+    for attr in ('plus_blend_label', 'plus_coffee_label', 'beans', 'title'):
+        value = getattr(qmc, attr, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def _notify(aw: Any, message: str) -> None:

@@ -180,3 +180,28 @@ def test_simulateur_nest_jamais_enfile(aw: FakeAw, store: OutboxStore) -> None:
     aw.qmc.plus_entity = 'esperanza'
     assert enqueue_current_roast(aw, settings=FakeSettings()) is False
     assert store.all_items() == []
+
+
+def test_enqueue_renseigne_date_et_grain(aw: FakeAw, store: OutboxStore) -> None:
+    aw.qmc.plus_entity = 'esperanza'
+    aw.qmc.roastepoch = 1785000000
+    aw.qmc.plus_coffee_label = 'Pérou, APU Cenfrocafe 2024'
+    enqueue_current_roast(aw, settings=FakeSettings())
+    item = store.all_items()[0]
+    assert item.roast_at == 1785000000
+    assert item.bean_label == 'Pérou, APU Cenfrocafe 2024'
+
+
+def test_le_melange_lemporte_sur_le_cafe_simple(aw: FakeAw, store: OutboxStore) -> None:
+    aw.qmc.plus_entity = 'esperanza'
+    aw.qmc.plus_coffee_label = 'Pérou'
+    aw.qmc.plus_blend_label = 'Mélange maison'
+    enqueue_current_roast(aw, settings=FakeSettings())
+    assert store.all_items()[0].bean_label == 'Mélange maison'
+
+
+def test_sans_roastepoch_on_horodate_quand_meme(aw: FakeAw, store: OutboxStore) -> None:
+    # une ligne sans date est inexploitable pour retrouver la cuisson
+    aw.qmc.plus_entity = 'esperanza'
+    enqueue_current_roast(aw, settings=FakeSettings())
+    assert (store.all_items()[0].roast_at or 0) > 0

@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS outbox (
   content_sha256    TEXT NOT NULL,
   entity_slug       TEXT,
   batch_label       TEXT,
+  roast_at          REAL,
+  bean_label        TEXT,
   state             TEXT NOT NULL,
   attempts          INTEGER NOT NULL DEFAULT 0,
   next_attempt_at   REAL NOT NULL,
@@ -95,6 +97,10 @@ class OutboxItem:
     sync_record: dict[str, Any] | None = None
     entity_slug: str | None = None
     batch_label: str | None = None
+    # Date de la torréfaction (epoch s) et libellé du grain : sans eux, une
+    # ligne en échec ne dit pas de quelle cuisson il s'agit.
+    roast_at: float | None = None
+    bean_label: str | None = None
     last_http_status: int | None = None
     last_error: str | None = None
     server_roast_id: str | None = None
@@ -126,6 +132,8 @@ def _row_to_item(r: sqlite3.Row) -> OutboxItem:
         sync_record=sync_record,
         entity_slug=r['entity_slug'],
         batch_label=r['batch_label'],
+        roast_at=r['roast_at'],
+        bean_label=r['bean_label'],
         last_http_status=r['last_http_status'],
         last_error=r['last_error'],
         server_roast_id=r['server_roast_id'],
@@ -151,7 +159,21 @@ class OutboxStore:
         self._db.execute('PRAGMA journal_mode=WAL')
         self._db.execute('PRAGMA synchronous=FULL')
         self._db.executescript(_SCHEMA)
+        self._migrate()
         self._db.commit()
+
+    def _migrate(self) -> None:
+        """Ajoute les colonnes apparues après la première mise en service.
+
+        CREATE TABLE IF NOT EXISTS n'ajoute rien à une table déjà créée : sans
+        cette reprise, une file remplie par une version précédente ferait
+        échouer toute lecture. Les items en attente doivent survivre aux mises
+        à jour de l'application — c'est toute la raison d'être de cette base.
+        """
+        existing = {row['name'] for row in self._db.execute('PRAGMA table_info(outbox)')}
+        for column, ddl in (('roast_at', 'REAL'), ('bean_label', 'TEXT')):
+            if column not in existing:
+                self._db.execute(f'ALTER TABLE outbox ADD COLUMN {column} {ddl}')
 
     # ---------------------------------------------------------------- écriture
 
@@ -164,6 +186,8 @@ class OutboxStore:
         entity_slug: str | None,
         batch_label: str | None,
         now: float,
+        roast_at: float | None = None,
+        bean_label: str | None = None,
     ) -> OutboxItem:
         """Dépose (ou remplace) une torréfaction dans la file.
 
@@ -192,11 +216,12 @@ class OutboxStore:
             self._db.execute(
                 """
                 INSERT INTO outbox (uuid, created_at, updated_at, alog_path, sync_record_json,
-                                    content_sha256, entity_slug, batch_label, state, attempts,
+                                    content_sha256, entity_slug, batch_label, roast_at, bean_label,
+                                    state, attempts,
                                     next_attempt_at, last_http_status, last_error,
                                     server_roast_id, bean_created, store_resolved, review_ack,
                                     sent_at, verified_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, NULL, NULL, 0, NULL, 0, NULL, NULL)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL, NULL, NULL, 0, NULL, 0, NULL, NULL)
                 ON CONFLICT(uuid) DO UPDATE SET
                     updated_at       = excluded.updated_at,
                     alog_path        = excluded.alog_path,
@@ -204,6 +229,8 @@ class OutboxStore:
                     content_sha256   = excluded.content_sha256,
                     entity_slug      = excluded.entity_slug,
                     batch_label      = excluded.batch_label,
+                    roast_at         = excluded.roast_at,
+                    bean_label       = excluded.bean_label,
                     state            = excluded.state,
                     attempts         = 0,
                     next_attempt_at  = excluded.next_attempt_at,
@@ -217,7 +244,7 @@ class OutboxStore:
                 """,
                 (uuid, now, now, str(path),
                  json.dumps(sync_record) if sync_record is not None else None,
-                 digest, entity_slug, batch_label, STATE_PENDING, now),
+                 digest, entity_slug, batch_label, roast_at, bean_label, STATE_PENDING, now),
             )
             self._db.commit()
         item = self.get(uuid)
