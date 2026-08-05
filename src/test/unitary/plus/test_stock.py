@@ -1451,3 +1451,30 @@ class TestRenderAmount:
     def test_zero_unit_size_does_not_divide_by_zero(self) -> None:
         """A degenerate size of 0 must not crash; it falls back to kg only."""
         assert self._render(50.0, {'name': 'bag', 'size': 0}) == 'KG'
+
+
+# ---------------------------------------------------------------------------
+# Numéro de lot dans la liste des cafés
+#
+# Deux fiches peuvent porter le même nom (ctr1/ctr2, jumelles inter-sociétés) et
+# ne se distinguer que par leur lot : sans lui, le choix se fait à l'aveugle.
+# ---------------------------------------------------------------------------
+
+def test_lot_suffix_affiche_le_lot() -> None:
+    from plus.stock import lotSuffix
+    assert lotSuffix({'lot_number': '3/210/112'}) == ' · lot 3/210/112'
+
+
+def test_lot_suffix_vide_si_inconnu() -> None:
+    from plus.stock import lotSuffix
+    assert lotSuffix({}) == ''
+    assert lotSuffix({'lot_number': ''}) == ''
+    assert lotSuffix({'lot_number': '   '}) == ''
+    assert lotSuffix({'lot_number': None}) == ''
+    # 'null' littéral : déjà rencontré dans les payloads (cf. coffeeLabel)
+    assert lotSuffix({'lot_number': 'null'}) == ''
+
+
+def test_lot_suffix_nettoie_les_espaces() -> None:
+    from plus.stock import lotSuffix
+    assert lotSuffix({'lot_number': '  15/2040/07  '}) == ' · lot 15/2040/07'

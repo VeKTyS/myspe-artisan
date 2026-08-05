@@ -505,6 +505,23 @@ unit_translations_plural = {
 }
 
 
+def lotSuffix(c:'Coffee') -> str:
+    """« · lot 3/210/112 » pour la liste des cafés, ou '' si le lot est inconnu.
+
+    Le lot est la clé de traçabilité du café vert : deux fiches peuvent porter
+    le même nom (ctr1/ctr2, fiches jumelles entre sociétés) et ne se distinguer
+    que par lui. Il est déjà affiché en lecture seule dans les Propriétés, mais
+    il fallait choisir le café AVANT de pouvoir le lire.
+    """
+    try:
+        lot = str(c.get('lot_number', '') or '').strip()
+    except Exception:  # pylint: disable=broad-except
+        return ''
+    if not lot or lot.lower() == 'null':
+        return ''
+    return f' · lot {lot}'
+
+
 def renderAmount(amount:float, default_unit:CoffeeUnit|None=None, target_unit_idx:int=0) -> str:
     kg_str = render_weight(amount, 1, weight_units.index('Kg'), brief=2)
     try:
@@ -934,7 +951,8 @@ def getCoffees(weight_unit_idx:int, store:str|None = None, entity:str|None = Non
                                     # is available in several locations
                                     loc = '' if store else f'{location}, '
                                     res[
-                                        f'{coffee_label} [{loc}{renderAmount(amount,default_unit,weight_unit_idx)}]'
+                                        f'{coffee_label}{lotSuffix(c)}'
+                                        f' [{loc}{renderAmount(amount,default_unit,weight_unit_idx)}]'
                                     ] = (c, s)
                 except Exception as e:  # pylint: disable=broad-except
                     _log.exception(e)
