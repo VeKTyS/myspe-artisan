@@ -106,3 +106,13 @@ def default_on_verified(uuid: str, sync_record: Any) -> None:
             aw.updatePlusStatusSignal.emit()  # @UndefinedVariable
     except Exception as e:  # pylint: disable=broad-except
         _log.exception(e)
+
+    # Le serveur vient de décrémenter le café vert de cette torréfaction : on
+    # rafraîchit le stock local sans attendre l'expiration du cache, sinon le
+    # poste continue d'afficher un stock qu'on sait déjà périmé.
+    try:
+        from plus import stock
+        stock.invalidate()
+        stock.update()
+    except Exception as e:  # pylint: disable=broad-except
+        _log.exception(e)

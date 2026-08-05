@@ -717,6 +717,12 @@ for handler in logging.root.handlers:
 
 _log: Final[logging.Logger] = logging.getLogger(__name__)
 
+# Filet du temps réel : période du rafraîchissement du stock quand aucun
+# changement n'est signalé. Un WebSocket peut tomber sans le dire, et un stock
+# faux ne doit jamais s'installer durablement. La requête elle-même reste sans
+# effet si le cache local a moins de 35 s (plus.config.stock_cache_expiration).
+STOCK_REFRESH_MS: Final[int] = 60_000
+
 
 
 if multiprocessing.current_process().name == 'MainProcess':
@@ -4637,6 +4643,17 @@ class ApplicationWindow(QMainWindow):
         # que tout ce qui restait en attente d'un lancement précédent reparte.
         QTimer.singleShot(2000, self._start_outbox)
 
+        # Synchronisation du stock avec ZABAWA.plus, en deux couches :
+        #   * temps réel (WebSocket) pour la réactivité — voir _start_realtime ;
+        #   * rafraîchissement périodique comme filet, parce qu'un WebSocket
+        #     peut mourir silencieusement (proxy, veille, coupure Wi-Fi) et
+        #     qu'un stock faux ne doit jamais s'installer durablement.
+        self.stockRefreshTimer = QTimer(self)
+        self.stockRefreshTimer.timeout.connect(self._refresh_stock)
+        self.stockRefreshTimer.start(STOCK_REFRESH_MS)
+
+        QTimer.singleShot(3000, self._start_realtime)
+
         self.zoomInShortcut = QShortcut(QKeySequence.StandardKey.ZoomIn, self)
         self.zoomInShortcut.activated.connect(self.zoomIn)
         self.zoomOutShortcut = QShortcut(QKeySequence.StandardKey.ZoomOut, self)
@@ -4654,6 +4671,46 @@ class ApplicationWindow(QMainWindow):
         self.update_checker = UpdateChecker()
         self.update_checker.update_available.connect(self._show_update_banner)
         self.update_checker.start()
+
+    @pyqtSlot()
+    def _refresh_stock(self) -> None:
+        """Réaligne le stock local sur ZABAWA.plus.
+
+        La requête part dans le thread du StockWorker et reste sans effet si le
+        cache local a moins de 35 s (plus.config.stock_cache_expiration), donc
+        ce tic ne provoque pas de trafic superflu.
+        """
+        try:
+            plus.stock.update()
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+
+    def _start_realtime(self) -> None:
+        """Ouvre l'abonnement temps réel aux changements de ZABAWA.plus."""
+        try:
+            from plus.realtime import RealtimeClient
+            self.realtime_client = RealtimeClient(self)
+            self.realtime_client.changed.connect(self._on_remote_change)
+            self.realtime_client.start()
+        except Exception as e:  # pylint: disable=broad-except
+            # Le temps réel est un confort : son échec ne doit pas priver le
+            # poste du rafraîchissement périodique.
+            _log.exception(e)
+
+    @pyqtSlot(str)
+    def _on_remote_change(self, table: str) -> None:
+        """Un enregistrement a changé côté ZABAWA.plus : on se réaligne.
+
+        On invalide avant de demander : sans cela, un cache de moins de 35 s
+        ferait ignorer la mise à jour alors qu'on vient d'apprendre qu'elle est
+        nécessaire.
+        """
+        _log.debug('changement distant sur %s', table)
+        try:
+            plus.stock.invalidate()
+            plus.stock.update()
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
 
     # MySpresso fork: file d'envoi des torréfactions vers ZABAWA.plus
     def _start_outbox(self) -> None:
@@ -22105,6 +22162,22 @@ class ApplicationWindow(QMainWindow):
                     if 'artisanlib.ble_port' in sys.modules:
                         from artisanlib import ble_port
                         ble_port.ble.close()
+                except Exception: # pylint: disable=broad-except
+                    pass
+
+                # MySpresso: arrêt propre du temps réel et de la file d'envoi.
+                # La file n'est pas vidée ici : ce qui n'est pas parti repart au
+                # prochain lancement, c'est précisément sa raison d'être.
+                try:
+                    client = getattr(self, 'realtime_client', None)
+                    if client is not None:
+                        client.stop()
+                except Exception: # pylint: disable=broad-except
+                    pass
+                try:
+                    worker = getattr(self, 'outbox_worker', None)
+                    if worker is not None:
+                        worker.stop()
                 except Exception: # pylint: disable=broad-except
                     pass
 

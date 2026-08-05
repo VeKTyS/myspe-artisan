@@ -384,6 +384,25 @@ def setStock(new_stock:Stock|None) -> None:
             stock_semaphore.release(1)
 
 
+# MySpresso: force the next update() to actually hit the server.
+#
+# update_blocking() ne va chercher le stock que si le cache local a dépassé
+# stock_cache_expiration (35 s). Après une torréfaction dont l'arrivée vient
+# d'être confirmée, le serveur a décrémenté le café vert à l'instant : attendre
+# l'expiration afficherait un stock que l'on sait déjà faux.
+def invalidate() -> None:
+    _log.debug('invalidate()')
+    try:
+        stock_semaphore.acquire(1)
+        if stock is not None and 'retrieved' in stock:
+            del stock['retrieved']
+    except Exception as e:  # pylint: disable=broad-except
+        _log.exception(e)
+    finally:
+        if stock_semaphore.available() < 1:
+            stock_semaphore.release(1)
+
+
 # save stock data to local file cache
 def save() -> None:
     _log.debug('save()')

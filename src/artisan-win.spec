@@ -400,10 +400,11 @@ for fn in [
     r'_internal\PyQt6\Qt6\bin\Qt6SpatialAudio.dll',
     r'_internal\PyQt6\Qt6\bin\Qt6Test.dll',
     r'_internal\PyQt6\Qt6\bin\Qt6TextToSpeech.dll',
+    # NOTE: Qt6WebSockets.dll ne doit PAS être supprimée — plus/realtime.py
+    # l'utilise pour l'abonnement temps réel au stock (QtWebSockets).
     r'_internal\PyQt6\Qt6\bin\Qt6WebChannelQuick.dll',
     r'_internal\PyQt6\Qt6\bin\Qt6WebEngineQuick.dll',
     r'_internal\PyQt6\Qt6\bin\Qt6WebEngineQuickDelegatesQml.dll',
-    r'_internal\PyQt6\Qt6\bin\Qt6WebSockets.dll',
     r'_internal\PyQt6\Qt6\plugins\platforms\qminimal.dll',
     r'_internal\PyQt6\Qt6\plugins\platforms\qoffscreen.dll',
     r'_internal\PyQt6\Qt6\plugins\imageformats\qicns.dll',
