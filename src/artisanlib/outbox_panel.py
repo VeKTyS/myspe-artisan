@@ -153,10 +153,30 @@ class OutboxDialog(QDialog):
         super().__init__(aw)
         self._aw = aw
         self._worker = worker
+        # Vue courante : les torréfactions encore en chemin, ou celles déjà
+        # confirmées. Les mélanger noyait les rares lignes qui demandent une
+        # action sous la masse de celles qui n'en demandent aucune.
+        self._show_past = False
         self.setWindowTitle("File d'envoi ZABAWA.plus")
-        self.resize(820, 380)
+        self.resize(880, 400)
 
         layout = QVBoxLayout(self)
+
+        tabs = QHBoxLayout()
+        self._tab_current = QPushButton('En cours')
+        self._tab_current.setCheckable(True)
+        self._tab_current.setChecked(True)
+        self._tab_current.clicked.connect(lambda: self._set_view(False))
+        self._tab_past = QPushButton('Torréfactions passées')
+        self._tab_past.setCheckable(True)
+        self._tab_past.setToolTip('Torréfactions confirmées, conservées 24 h.')
+        self._tab_past.clicked.connect(lambda: self._set_view(True))
+        tabs.addWidget(self._tab_current)
+        tabs.addWidget(self._tab_past)
+        tabs.addStretch()
+        self._summary = QLabel()
+        tabs.addWidget(self._summary)
+        layout.addLayout(tabs)
         self._table = QTableWidget(0, len(self.COLUMNS), self)
         self._table.setHorizontalHeaderLabels(list(self.COLUMNS))
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -181,12 +201,17 @@ class OutboxDialog(QDialog):
         ack_btn.setToolTip('Retire le rappel « grain créé automatiquement » '
                            'une fois la fiche complétée côté web.')
         ack_btn.clicked.connect(self._acknowledge_selected)
-        delete_btn = QPushButton('🗑')
-        delete_btn.setToolTip('Retire de la liste les torréfactions confirmées.\n'
-                              'Sans sélection, retire toutes les confirmées.\n'
-                              'Une torréfaction non confirmée ne peut pas être supprimée.')
-        delete_btn.setFixedWidth(40)
-        delete_btn.clicked.connect(self._delete_verified)
+        # La poubelle ne s'active que sur des torréfactions confirmées : un
+        # bouton actif qui refuse ensuite d'agir est plus déroutant qu'un bouton
+        # grisé, et l'opérateur voit tout de suite ce qui est effaçable.
+        self._delete_btn = QPushButton('🗑')
+        self._delete_btn.setToolTip('Retire de la liste les torréfactions confirmées.\n'
+                                    'Disponible uniquement pour celles dont '
+                                    "l'arrivée est confirmée.")
+        self._delete_btn.setFixedWidth(40)
+        self._delete_btn.setEnabled(False)
+        self._delete_btn.clicked.connect(self._delete_verified)
+        delete_btn = self._delete_btn
         actions.addWidget(retry_btn)
         actions.addWidget(retry_all_btn)
         actions.addWidget(copy_btn)
@@ -198,14 +223,41 @@ class OutboxDialog(QDialog):
         actions.addWidget(close_btn)
         layout.addLayout(actions)
 
+        self._table.itemSelectionChanged.connect(self._update_delete_state)
         self.refresh()
         try:
             worker.changed.connect(self.refresh)
         except Exception:  # pylint: disable=broad-except
             pass
 
-    def refresh(self) -> None:
+    def _set_view(self, past: bool) -> None:
+        self._show_past = past
+        self._tab_current.setChecked(not past)
+        self._tab_past.setChecked(past)
+        self.refresh()
+
+    def _visible_items(self) -> list[Any]:
         items = self._worker.store.all_items()
+        if self._show_past:
+            return [i for i in items if i.state == STATE_VERIFIED]
+        return [i for i in items if i.state != STATE_VERIFIED]
+
+    def _update_delete_state(self) -> None:
+        """La poubelle n'est active que si du confirmé est visé."""
+        store_items = {i.uuid: i for i in self._worker.store.all_items()}
+        selected = self._selected_uuids()
+        if selected:
+            targets = [store_items[u] for u in selected if u in store_items]
+        else:
+            targets = self._visible_items()
+        self._delete_btn.setEnabled(any(i.state == STATE_VERIFIED for i in targets))
+
+    def refresh(self) -> None:
+        items = self._visible_items()
+        total = self._worker.store.counts()
+        pending = sum(n for s, n in total.items() if s != STATE_VERIFIED)
+        confirmed = total.get(STATE_VERIFIED, 0)
+        self._summary.setText(f'{pending} en cours · {confirmed} confirmée(s)')
         self._table.setRowCount(len(items))
         for row, item in enumerate(items):
             state = _STATE_LABELS.get(item.state, item.state)
@@ -222,6 +274,7 @@ class OutboxDialog(QDialog):
                 if col == 6 and value:
                     cell.setToolTip(value)
                 self._table.setItem(row, col, cell)
+        self._update_delete_state()
 
     def _selected_uuids(self) -> list[str]:
         uuids: list[str] = []
@@ -284,7 +337,8 @@ class OutboxDialog(QDialog):
             verified = [i.uuid for i in targets if i.state == STATE_VERIFIED]
             blocked = len(targets) - len(verified)
         else:
-            verified = [i.uuid for i in items if i.state == STATE_VERIFIED]
+            # Sans sélection : tout ce qui est confirmé dans la vue affichée.
+            verified = [i.uuid for i in self._visible_items() if i.state == STATE_VERIFIED]
             blocked = 0
 
         if not verified:

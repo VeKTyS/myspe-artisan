@@ -30,9 +30,14 @@ _log: Final[logging.Logger] = logging.getLogger(__name__)
 # chaque item ; ce tic ne fait que réveiller la boucle.
 POLL_SECONDS: Final[float] = 30.0
 
-# Les items acquittés sont conservés un mois : de quoi diagnostiquer après coup
-# sans laisser la base grossir indéfiniment.
-KEEP_VERIFIED_SECONDS: Final[float] = 30 * 24 * 3600
+# Les torréfactions confirmées sont conservées 24 h, le temps qu'un opérateur
+# les retrouve dans l'onglet « passées » en fin de journée. Au-delà, elles n'ont
+# plus d'intérêt local : la donnée vit sur ZABAWA.plus, et le journal
+# d'ingestion côté serveur garde la trace de ce qui a été reçu.
+KEEP_VERIFIED_SECONDS: Final[float] = 24 * 3600
+
+# Une application qui tourne plusieurs jours doit purger sans redémarrage.
+PURGE_INTERVAL_SECONDS: Final[float] = 3600
 
 # Au-delà, l'interface signale un envoi qui traîne.
 STALE_SECONDS: Final[float] = 24 * 3600
@@ -88,17 +93,27 @@ class _WorkerObject(QObject):
         self._wake = threading.Event()
         self._stopped = False
 
-    @pyqtSlot()
-    def run(self) -> None:
-        # Entretien au démarrage : fichiers orphelins d'un crash, items acquittés
-        # trop anciens. Tout ce qui n'est pas acquitté est repris tel quel.
+    def _housekeeping(self) -> None:
+        """Fichiers orphelins d'un crash, torréfactions confirmées expirées."""
         try:
             self._store.cleanup_orphans()
             self._store.purge_verified(before=time.time() - KEEP_VERIFIED_SECONDS)
         except Exception as e:  # pylint: disable=broad-except
             _log.exception(e)
 
+    @pyqtSlot()
+    def run(self) -> None:
+        # Entretien au démarrage. Tout ce qui n'est PAS confirmé est repris tel
+        # quel : seules les confirmées expirent.
+        self._housekeeping()
+        last_purge = time.time()
+
         while not self._stopped:
+            # Une application qui tourne plusieurs jours doit purger sans
+            # redémarrage, sinon la liste des passées grossit indéfiniment.
+            if time.time() - last_purge > PURGE_INTERVAL_SECONDS:
+                self._housekeeping()
+                last_purge = time.time()
             if self._owns_lock:
                 try:
                     treated = process_once(

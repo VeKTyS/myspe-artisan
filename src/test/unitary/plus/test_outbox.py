@@ -274,3 +274,19 @@ def test_delete_verified_sans_uuid_ne_fait_rien(store: OutboxStore) -> None:
     store.enqueue(UUID_A, 'v1', sync_record=None, entity_slug=None, batch_label=None, now=0.0)
     assert store.delete_verified([]) == 0
     assert len(store.all_items()) == 1
+
+
+def test_purge_a_24h_ne_touche_pas_les_confirmees_recentes(store: OutboxStore) -> None:
+    # Une torréfaction confirmée il y a moins de 24 h reste consultable dans
+    # l'onglet « passées » ; au-delà, la donnée vit sur ZABAWA.plus.
+    from plus.outbox_worker import KEEP_VERIFIED_SECONDS
+    assert KEEP_VERIFIED_SECONDS == 24 * 3600
+
+    now = 1_000_000.0
+    store.enqueue(UUID_A, 'v1', sync_record=None, entity_slug=None, batch_label=None, now=now)
+    store.mark_sent(UUID_A, http_status=201, server_roast_id=None, bean_created=False,
+                    store_resolved=True, now=now)
+    store.mark_verified(UUID_A, now=now)
+
+    assert store.purge_verified(before=now - 1) == 0            # rien d'expiré
+    assert store.purge_verified(before=now + KEEP_VERIFIED_SECONDS + 1) == 1
