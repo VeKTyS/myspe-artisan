@@ -1,0 +1,72 @@
+name: Warm build caches
+
+# Prépare les caches lourds du build Windows DEPUIS LA BRANCHE PAR DÉFAUT.
+#
+# Pourquoi ce workflow existe : les caches GitHub Actions sont cloisonnés par
+# ref. Un build déclenché par un tag (c'est le cas de « Build & Release ») écrit
+# ses caches dans le périmètre de ce tag, et le tag suivant ne les voit pas —
+# seuls les caches créés sur la branche par défaut sont lisibles depuis tous les
+# refs. Résultat mesuré sur v4.5.1 : Qt (39 s), vc_redist (24 s) et les paquets
+# pip (87 s) étaient re-téléchargés à chaque release, alors que trois caches
+# étaient bien écrits à chaque fois… pour personne.
+#
+# Ce workflow tourne sur main et ne fait le travail qu'en cas de cache absent.
+# Les clés sont volontairement IDENTIQUES à celles de release.yml : toute
+# divergence rendrait le préchauffage inutile sans que rien ne le signale.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  warm-windows:
+    name: Warm Windows caches
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Peuple le cache pip (clé dérivée du hash de requirements.txt, la même
+      # que celle utilisée par le job de release).
+      # NOTE: configuration identique à release.yml, sans cache-dependency-path.
+      # setup-python dérive la clé du cache pip de cette configuration : la
+      # moindre différence produirait une clé distincte, et le préchauffage
+      # serait silencieusement inutile.
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        working-directory: src
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Cache Qt 6.5.3
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: C:\Qt
+          key: qt-win64-msvc2019_64-6.5.3-v1
+
+      - name: Install Qt via aqtinstall
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        run: |
+          pip install aqtinstall
+          aqt install-qt windows desktop 6.5.3 win64_msvc2019_64 -O C:\Qt
+
+      - name: Cache vc_redist.x64.exe
+        id: cache-vcredist
+        uses: actions/cache@v4
+        with:
+          path: vc_redist.x64.exe
+          key: vc-redist-x64-vs17
+
+      - name: Download vc_redist.x64.exe
+        if: steps.cache-vcredist.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "vc_redist.x64.exe"
