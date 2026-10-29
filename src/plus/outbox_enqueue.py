@@ -180,6 +180,85 @@ def enqueue_current_roast(
         return False
 
 
+# Filet de l'arrêt (OFF).
+#
+# Le DROP n'enfile la torréfaction que s'il est le premier et jamais annulé
+# (canvas.markDrop) ; un OFF sans DROP n'enfile rien. Dans ces cas, le serveur ne
+# recevait que la fin de session, supprimait la ligne « en cours », et la broche
+# disparaissait (constat 2026-10-29, broche de 09:46). À l'arrêt, toute broche
+# chargée doit donc se trouver dans la file, quel que soit l'ordre des boutons.
+#
+# Sous ce seuil, un arrêt sans DROP peut être un faux départ (CHARGE pressé par
+# erreur) : on demande au lieu d'envoyer. C'est le seuil qu'Artisan retient
+# déjà pour marquer DROP automatiquement à l'arrêt.
+OFF_ASK_BELOW_SEC: Final[float] = 5 * 60
+
+
+def off_safeguard_action(
+    *,
+    charged: bool,
+    dropped: bool,
+    already_queued: bool,
+    roast_sec: float,
+) -> str:
+    """Décide du sort d'une broche à l'arrêt : 'none', 'send' ou 'ask'."""
+    if not charged or already_queued:
+        return 'none'
+    if dropped or roast_sec >= OFF_ASK_BELOW_SEC:
+        return 'send'
+    return 'ask'
+
+
+def ensure_roast_enqueued_at_off(
+    aw: Any,
+    *,
+    confirm: Any = None,
+    settings: Any = None,
+) -> bool:
+    """Garantit qu'une broche chargée est dans la file à l'arrêt.
+
+    Renvoie True si la torréfaction est dans la file au retour (déjà enfilée au
+    DROP ou enfilée ici). `confirm(roast_sec) -> bool` tranche le cas douteux ;
+    sans lui, on envoie : une broche en trop se supprime sur le web, une broche
+    perdue ne se retrouve pas.
+    """
+    try:
+        if getattr(aw, 'simulator', None):
+            return False
+        qmc = aw.qmc
+        timeindex = qmc.timeindex
+        timex = qmc.timex
+        charged = timeindex[0] > -1 and len(timex) > timeindex[0]
+        roast_sec = float(timex[-1] - timex[timeindex[0]]) if charged else 0.0
+        action = off_safeguard_action(
+            charged=charged,
+            dropped=timeindex[6] > 0,
+            already_queued=is_roast_queued(qmc),
+            roast_sec=roast_sec,
+        )
+        if action == 'none':
+            return charged
+        if action == 'ask' and confirm is not None and not confirm(roast_sec):
+            _log.info('arrêt sans DROP après %.0f s : broche non envoyée (choix opérateur)', roast_sec)
+            return False
+        _log.warning('broche absente de la file à l\'arrêt (DROP %s, %.0f s) : envoi par le filet',
+                     'marqué' if timeindex[6] > 0 else 'absent', roast_sec)
+        return enqueue_current_roast(aw, ask_entity=True, settings=settings)
+    except Exception as e:  # pylint: disable=broad-except
+        _log.exception(e)
+        _notify(aw, f'Mise en file impossible : {e}')
+        return False
+
+
+def is_roast_queued(qmc: Any) -> bool:
+    """La file connaît-elle déjà cette torréfaction (même UUID) ?"""
+    try:
+        canonical = str(_uuid.UUID(str(getattr(qmc, 'roastUUID', None))))
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return get_store().get(canonical) is not None
+
+
 def _now() -> float:
     import time
     return time.time()

@@ -14540,6 +14540,8 @@ class tgraphcanvas(QObject):
     # is already uploaded via addRoast() (plus account connected + DROP set),
     # that upload flips status to 'done' itself, so we skip the minimal signal
     # to avoid a second, partial /aroast write for the same id.
+    # Même règle dès que la broche est dans la file d'envoi : un signal de fin
+    # arrivé après le .alog réécrivait la date de la broche avec l'heure d'arrêt.
     def myspresso_end_session(self) -> None:
         if not self.myspresso_session_active or not self.roastUUID:
             return
@@ -14550,6 +14552,12 @@ class tgraphcanvas(QObject):
             and self.autoDROPenabled)
         if full_upload_handles_it:
             return
+        try:
+            from plus.outbox_enqueue import is_roast_queued
+            if is_roast_queued(self):
+                return
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
         try:
             from plus.myspresso_session import send_session_end
             send_session_end(self.roastUUID)
@@ -14572,6 +14580,17 @@ class tgraphcanvas(QObject):
             self.aw.enableSaveActions()
             self.aw.resetCurveVisibilities()
             self.flagstart = False
+            # MySpresso : filet de l'arrêt. Une broche chargée dont le DROP n'a
+            # rien enfilé (OFF sans DROP, DROP annulé puis remis, société
+            # inconnue au DROP) part maintenant, AVANT la fin de session : sans
+            # .alog, le serveur supprimait la ligne « en cours » et la broche
+            # disparaissait (plus/outbox_enqueue.py).
+            try:
+                from plus.outbox_enqueue import ensure_roast_enqueued_at_off
+                if ensure_roast_enqueued_at_off(self.aw, confirm=self.aw.confirm_send_short_roast):
+                    self.aw._refresh_outbox_badge() # pylint: disable=protected-access
+            except Exception as e:  # pylint: disable=broad-except
+                _log.exception(e)
             # tell zabawa.plus the roast is over (mirrors /asession/start at CHARGE)
             self.myspresso_end_session()
             if self.aw.simulator:

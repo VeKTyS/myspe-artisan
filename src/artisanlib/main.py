@@ -4774,6 +4774,29 @@ class ApplicationWindow(QMainWindow):
             _log.exception(e)
             return None
 
+    def confirm_send_short_roast(self, roast_sec: float) -> bool:
+        """Arrêt sans DROP peu après CHARGE : vraie broche ou faux départ ?
+
+        Oui par défaut, et en cas d'erreur : une broche en trop se supprime sur
+        le web, une broche perdue ne se retrouve pas.
+        """
+        try:
+            minutes = max(1, round(roast_sec / 60))
+            reply = QMessageBox.question(
+                self,
+                QApplication.translate('Plus', 'Torréfaction arrêtée sans DROP'),
+                QApplication.translate(
+                    'Plus',
+                    'La torréfaction a été arrêtée après {} min sans DROP.\n\n'
+                    'Du café a-t-il été torréfié ? Si oui, elle sera envoyée sur ZABAWA.plus.'
+                ).format(minutes),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes)
+            return reply != QMessageBox.StandardButton.No
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+            return True
+
     def _show_update_banner(self, version: str, url: str, name: str, size: int) -> None:
         from artisanlib.updater import UpdateBanner
         # Avoid stacking a second banner when one is already showing (e.g. the
